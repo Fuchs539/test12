@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NexusAnimeskid</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Noto Sans JP', sans-serif;
+      background: linear-gradient(135deg, #ffffff, #e0f7ff, #f0e7ff);
+      color: #1a1a1a;
+      scroll-behavior: smooth;
+      position: relative;
+      overflow-x: hidden;
+      font-size: 1.1rem;
+      line-height: 1.6;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="none"/><path d="M50 20c-10 0-18 8-18 18s8 18 18 18 18-8 18-18-8-18-18-18zm0 30c-6.6 0-12-5.4-12-12s5.4-12 12-12 12 5.4 12 12-5.4 12-12 12z" fill="rgba(0,0,0,0.1)"/></svg>') repeat;
+      opacity: 0.1;
+      z-index: -1;
+    }
+    .manga-icon {
+      width: 24px;
+      height: 24px;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transition: transform 0.3s ease;
+    }
+    .card:hover {
+      transform: translateY(-4px);
+    }
+    .action-btn {
+      background: linear-gradient(45deg, #66ccff, #cc99ff);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 20px;
+      transition: all 0.3s ease;
+      font-size: 1rem;
+    }
+    .action-btn:hover {
+      transform: scale(1.05);
+    }
+    .delete-btn {
+      background: linear-gradient(45deg, #ff4d4d, #ff8080);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      transition: all 0.3s ease;
+      font-size: 0.9rem;
+    }
+    .delete-btn:hover {
+      transform: scale(1.05);
+    }
+    .tab {
+      background: #e5e7eb;
+      padding: 12px 24px;
+      cursor: pointer;
+      font-size: 1.1rem;
+      flex: 1;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+    .tab.active {
+      background: #ffffff;
+      font-weight: bold;
+      border-bottom: 3px solid #cc99ff;
+      border-radius: 12px 12px 0 0;
+    }
+    .comment-section {
+      display: none;
+    }
+    .comment-section.expanded {
+      display: block;
+    }
+    .image-modal, .story-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-y: auto;
+      z-index: 1000;
+      padding: 20px;
+    }
+    .image-modal img {
+      max-width: 90%;
+      max-height: 80%;
+      border-radius: 12px;
+    }
+    .story-modal .story-content {
+      max-width: 800px;
+      width: 90%;
+      font-size: 1.2rem;
+      line-height: 1.8;
+      white-space: pre-wrap;
+      margin-bottom: 20px;
+    }
+    .avatar-dropzone {
+      border: 2px dashed #d1d5db;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.3s ease;
+    }
+    .avatar-dropzone.dragover {
+      border-color: #cc99ff;
+    }
+    select, input, textarea {
+      font-size: 1rem;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      width: 100%;
+      margin-top: 8px;
+    }
+    label {
+      font-size: 1.1rem;
+      color: #1a1a1a;
+      margin-top: 12px;
+      display: block;
+    }
+    @media (max-width: 640px) {
+      body {
+        font-size: 1rem;
+      }
+      .card {
+        max-width: 100%;
+        margin: 12px 8px;
+      }
+      .tab {
+        padding: 10px 16px;
+        font-size: 1rem;
+      }
+      .action-btn, .delete-btn {
+        padding: 10px 20px;
+      }
+      .tabs {
+        display: flex;
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+      }
+      .tab {
+        flex: 0 0 auto;
+        border-radius: 12px;
+        margin: 4px;
+      }
+      .tab.active {
+        border-bottom: none;
+        border-radius: 12px;
+      }
+      .story-modal .story-content {
+        font-size: 1.1rem;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <!-- Header -->
+  <div class="p-4 sticky top-0 bg-white/80 backdrop-blur-sm z-10 text-center">
+    <h1 class="text-3xl font-bold text-[#cc99ff]">NexusAnimeskid</h1>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs flex sticky top-16 bg-white/80 backdrop-blur-sm z-10">
+    <div id="tab-images" class="tab active">Anime-Bilder</div>
+    <div id="tab-stories" class="tab">Anime-Geschichten</div>
+    <div id="tab-admin" class="tab">Admin-Kanal</div>
+    <div id="tab-upload" class="tab">Upload</div>
+  </div>
+
+  <!-- Bilder-Tab -->
+  <div id="images-content" class="p-4">
+    <div id="image-feed" class="flex flex-col items-center"></div>
+  </div>
+
+  <!-- Geschichten-Tab -->
+  <div id="stories-content" class="p-4 hidden">
+    <div id="story-feed" class="flex flex-col items-center"></div>
+  </div>
+
+  <!-- Admin-Kanal -->
+  <div id="admin-content" class="p-4 hidden">
+    <div class="card p-6 m-4 w-full max-w-md">
+      <h2 class="text-2xl font-bold text-blue-600">Admin-Kanal</h2>
+      <div class="flex flex-col items-center">
+        <div
+          id="avatar-dropzone"
+          class="avatar-dropzone w-32 h-32 flex items-center justify-center"
+        >
+          <img
+            id="admin-avatar"
+            src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 150 150'><rect width='150' height='150' fill='%23e5e7eb'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%23666666'>Anime-Avatar</text></svg>"
+            alt="Profilbild"
+            class="w-32 h-32 rounded-full object-cover"
+          />
+        </div>
+        <p class="text-sm text-gray-600 mt-2">Avatar hierher ziehen oder klicken</p>
+        <input type="file" id="avatar-file" accept="image/*" class="hidden" />
+        <h3 class="text-xl font-bold mt-2 text-[#cc99ff]">Admin</h3>
+        <div class="flex justify-around w-full mt-3 text-sm text-[#cc99ff]">
+          <span>🌟 Gesamtaufrufe: <span id="total-views">0</span></span>
+          <span>📅 Monatsaufrufe: <span id="monthly-views">0</span></span>
+          <span>👥 Abonnenten: <span id="subscribers">0</span></span>
+        </div>
+        <button id="subscribe-btn" class="action-btn mt-4 w-full">Abonnieren</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Upload-Tab -->
+  <div id="upload-content" class="p-4 hidden">
+    <div class="card p-6 m-4 w-full max-w-md">
+      <h2 class="text-2xl font-bold text-blue-600">Upload</h2>
+      <div id="upload-code-section">
+        <label for="upload-code">Admin-Code</label>
+        <input type="text" id="upload-code" placeholder="Code eingeben" />
+        <button id="check-upload-code" class="action-btn mt-3 w-full">Upload freischalten</button>
+      </div>
+      <div id="upload-forms" class="hidden mt-4">
+        <!-- Bilder-Upload -->
+        <h3 class="text-lg font-bold text-gray-700">Bild hochladen</h3>
+        <label for="image-file">Bild auswählen</label>
+        <input type="file" id="image-file" accept="image/*" multiple />
+        <label for="image-category">Kategorie</label>
+        <select id="image-category">
+          <option value="Fanart">Fanart</option>
+          <option value="Scene">Szene</option>
+          <option value="Wallpaper">Wallpaper</option>
+        </select>
+        <button id="submit-image" class="action-btn mt-4 w-full">Bild(er) hochladen</button>
+        <!-- Geschichten-Upload -->
+        <h3 class="text-lg font-bold text-gray-700 mt-6">Geschichte hochladen</h3>
+        <label for="story-title">Titel</label>
+        <input type="text" id="story-title" placeholder="Titel der Geschichte" />
+        <label for="story-category">Kategorie</label>
+        <select id="story-category">
+          <option value="Shonen">Shonen</option>
+          <option value="Romance">Romance</option>
+          <option value="Fantasy">Fantasy</option>
+          <option value="Isekai">Isekai</option>
+          <option value="Horror">Horror</option>
+          <option value="Slice of Life">Slice of Life</option>
+        </select>
+        <label for="story-text">Geschichte</label>
+        <textarea id="story-text" class="h-48" placeholder="Deine Geschichte"></textarea>
+        <button id="submit-story" class="action-btn mt-4 w-full">Geschichte hochladen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bild-Modal -->
+  <div id="image-modal" class="image-modal hidden">
+    <button id="close-image-modal" class="action-btn mb-4">Schließen</button>
+    <img id="modal-image" src="" alt="Zoomed Image" />
+    <p id="modal-image-category" class="text-sm text-gray-600 mt-2"></p>
+    <div class="flex justify-between w-full max-w-md mt-3 text-base text-[#cc99ff]">
+      <span id="image-modal-likes">❤️ 0</span>
+      <span>💬 <span id="image-modal-comment-count">0</span></span>
+      <span>👀 <span id="image-modal-views">0</span></span>
+    </div>
+    <button id="image-modal-like-btn" class="action-btn mt-3 w-full max-w-md">Like</button>
+    <div id="image-modal-comment-section" class="comment-section w-full max-w-md mt-3"></div>
+    <button id="image-modal-more-comments" class="text-blue-500 text-sm mt-2 hidden">Mehr anzeigen</button>
+    <div class="w-full max-w-md mt-3">
+      <textarea id="image-modal-comment-input" class="h-16" placeholder="Dein Kommentar..."></textarea>
+      <button id="image-modal-submit-comment" class="action-btn mt-2 w-full">Kommentieren</button>
+    </div>
+  </div>
+
+  <!-- Geschichten-Modal -->
+  <div id="story-modal" class="story-modal hidden">
+    <button id="close-story-modal" class="action-btn mb-4">Schließen</button>
+    <h2 id="story-modal-title" class="text-2xl font-bold text-[#cc99ff]"></h2>
+    <p id="modal-story-category" class="text-sm text-gray-600 mt-2"></p>
+    <div id="story-modal-content" class="story-content"></div>
+    <div class="flex justify-between w-full max-w-md mt-3 text-base text-[#cc99ff]">
+      <span id="story-modal-likes">❤️ 0</span>
+      <span>💬 <span id="story-modal-comment-count">0</span></span>
+      <span>👀 <span id="story-modal-views">0</span></span>
+    </div>
+    <button id="story-modal-like-btn" class="action-btn mt-3 w-full max-w-md">Like</button>
+    <div id="story-modal-comment-section" class="comment-section w-full max-w-md mt-3"></div>
+    <button id="story-modal-more-comments" class="text-blue-500 text-sm mt-2 hidden">Mehr anzeigen</button>
+    <div class="w-full max-w-md mt-3">
+      <textarea id="story-modal-comment-input" class="h-16" placeholder="Dein Kommentar..."></textarea>
+      <button id="story-modal-submit-comment" class="action-btn mt-2 w-full">Kommentieren</button>
+    </div>
+  </div>
+
+  <script>
+    // IndexedDB für Bilder
+    const dbName = 'NexusAnimeskidDB';
+    const storeName = 'images';
+    let db;
+
+    function initDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(dbName, 1);
+        request.onupgradeneeded = (event) => {
+          db = event.target.result;
+          db.createObjectStore(storeName, { keyPath: 'id' });
+        };
+        request.onsuccess = (event) => {
+          db = event.target.result;
+          resolve(db);
+        };
+        request.onerror = (event) => {
+          reject('IndexedDB Fehler: ' + event.target.errorCode);
+        };
+      });
+    }
+
+    async function saveImage(image) {
+      const transaction = db.transaction([storeName], 'readwrite');
+      const store = transaction.objectStore(storeName);
+      store.put(image);
+      return new Promise((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject('Speicherfehler');
+      });
+    }
+
+    async function getImages() {
+      const transaction = db.transaction([storeName], 'readonly');
+      const store = transaction.objectStore(storeName);
+      return new Promise((resolve, reject) => {
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject('Ladefehler');
+      });
+    }
+
+    async function deleteImage(id) {
+      const transaction = db.transaction([storeName], 'readwrite');
+      const store = transaction.objectStore(storeName);
+      store.delete(id);
+      return new Promise((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject('Löschfehler');
+      });
+    }
+
+    // Persistente Speicherung für Geschichten und Admin-Daten
+    const initialStories = [
+      {
+        id: 1,
+        title: 'Die Legende von Aetheria',
+        content: 'In einer Welt voller Magie erwacht ein Junge ohne Erinnerungen. Seine Reise führt ihn durch verzauberte Wälder, vergessene Tempel und gefährliche Schlachten. Eines Tages trifft er auf eine geheimnisvolle Elfe, die ihm ein uraltes Artefakt anvertraut. Dieses Artefakt, so sagt sie, könnte die Welt retten – oder zerstören. Mit jedem Schritt entdeckt er mehr über seine Vergangenheit und die dunklen Mächte, die ihn verfolgen...',
+        category: 'Isekai',
+        likes: 0,
+        comments: [],
+        views: 0
+      }
+    ];
+    const initialAdmin = {
+      avatar: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 150"><rect width="150" height="150" fill="%23e5e7eb"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%23666666">Anime-Avatar</text></svg>',
+      totalViews: 0,
+      monthlyViews: 0,
+      subscribers: 0,
+      isSubscribed: false
+    };
+
+    let images = [];
+    let stories = JSON.parse(localStorage.getItem('nexusAnimeskidStories')) || initialStories;
+    let adminData = JSON.parse(localStorage.getItem('nexusAnimeskidAdmin')) || initialAdmin;
+
+    function saveData() {
+      localStorage.setItem('nexusAnimeskidStories', JSON.stringify(stories));
+      localStorage.setItem('nexusAnimeskidAdmin', JSON.stringify(adminData));
+    }
+
+    // Tab-Logik
+    const imagesTab = document.getElementById('tab-images');
+    const storiesTab = document.getElementById('tab-stories');
+    const adminTab = document.getElementById('tab-admin');
+    const uploadTab = document.getElementById('tab-upload');
+    const imagesContent = document.getElementById('images-content');
+    const storiesContent = document.getElementById('stories-content');
+    const adminContent = document.getElementById('admin-content');
+    const uploadContent = document.getElementById('upload-content');
+    imagesTab.addEventListener('click', () => {
+      imagesTab.classList.add('active');
+      storiesTab.classList.remove('active');
+      adminTab.classList.remove('active');
+      uploadTab.classList.remove('active');
+      imagesContent.classList.remove('hidden');
+      storiesContent.classList.add('hidden');
+      adminContent.classList.add('hidden');
+      uploadContent.classList.add('hidden');
+    });
+    storiesTab.addEventListener('click', () => {
+      storiesTab.classList.add('active');
+      imagesTab.classList.remove('active');
+      adminTab.classList.remove('active');
+      uploadTab.classList.remove('active');
+      storiesContent.classList.remove('hidden');
+      imagesContent.classList.add('hidden');
+      adminContent.classList.add('hidden');
+      uploadContent.classList.add('hidden');
+    });
+    adminTab.addEventListener('click', () => {
+      adminTab.classList.add('active');
+      imagesTab.classList.remove('active');
+      storiesTab.classList.remove('active');
+      uploadTab.classList.remove('active');
+      adminContent.classList.remove('hidden');
+      imagesContent.classList.add('hidden');
+      storiesContent.classList.add('hidden');
+      uploadContent.classList.add('hidden');
+    });
+    uploadTab.addEventListener('click', () => {
+      uploadTab.classList.add('active');
+      imagesTab.classList.remove('active');
+      storiesTab.classList.remove('active');
+      adminTab.classList.remove('active');
+      uploadContent.classList.remove('hidden');
+      imagesContent.classList.add('hidden');
+      storiesContent.classList.add('hidden');
+      adminContent.classList.add('hidden');
+    });
+
+    // Upload-Code-Logik
+    const checkUploadCodeBtn = document.getElementById('check-upload-code');
+    const uploadCodeInput = document.getElementById('upload-code');
+    const uploadForms = document.getElementById('upload-forms');
+    const uploadCodeSection = document.getElementById('upload-code-section');
+    if (checkUploadCodeBtn && uploadCodeInput && uploadForms && uploadCodeSection) {
+      checkUploadCodeBtn.addEventListener('click', () => {
+        if (uploadCodeInput.value === 'Chimaking2') {
+          uploadForms.classList.remove('hidden');
+          uploadCodeSection.classList.add('hidden');
+        } else {
+          alert('Falscher Code!');
+        }
+      });
+    }
+
+    // Bilder rendern
+    let imageCounter = 0;
+    async function renderImages() {
+      const feed = document.getElementById('image-feed');
+      feed.innerHTML = '';
+      images = await getImages();
+      imageCounter = images.reduce((max, img) => Math.max(max, img.id), 0);
+      if (images.length === 0) {
+        feed.innerHTML = '<p class="text-sm text-gray-600">Keine Inhalte vorhanden.</p>';
+        return;
+      }
+      for (const img of images) {
+        const src = URL.createObjectURL(img.blob);
+        const card = document.createElement('div');
+        card.className = 'card p-3 m-4 w-full max-w-md';
+        card.dataset.imageId = img.id;
+        card.innerHTML = `
+          <img id="image-${img.id}" src="${src}" alt="Fanart" class="w-full h-48 object-cover rounded-lg cursor-pointer"/>
+          <p class="text-sm text-gray-600 mt-2">Kategorie: ${img.category}</p>
+          <div class="flex justify-between mt-2 text-sm text-[#cc99ff]">
+            <span id="image-likes-${img.id}">❤️ ${img.likes}</span>
+            <span>💬 <span id="image-comment-count-${img.id}">${img.comments.length}</span></span>
+            <span>👀 <span id="image-views-${img.id}">${img.views}</span></span>
+          </div>
+          <button id="image-like-btn-${img.id}" class="action-btn mt-2 w-full">Like</button>
+          <div id="image-comment-section-${img.id}" class="comment-section w-full mt-2">${img.comments.map(c => `<div class="text-sm text-gray-600 border-t pt-2">${c}</div>`).join('')}</div>
+          <button id="image-more-comments-${img.id}" class="text-blue-500 text-sm mt-2 ${img.comments.length > 0 ? '' : 'hidden'}">Mehr anzeigen</button>
+          <div class="w-full mt-2">
+            <textarea id="image-comment-input-${img.id}" class="h-16" placeholder="Dein Kommentar..."></textarea>
+            <button id="image-submit-comment-${img.id}" class="action-btn mt-2 w-full">Kommentieren</button>
+          </div>
+          <div class="w-full mt-2">
+            <label for="image-delete-code-${img.id}">Lösch-Code</label>
+            <input type="text" id="image-delete-code-${img.id}" placeholder="Code eingeben"/>
+            <button id="image-delete-btn-${img.id}" class="delete-btn mt-2 w-full">Bild löschen</button>
+          </div>
+        `;
+        feed.appendChild(card);
+        setupImageModal(img.id);
+        setupLikeButton(`image-like-btn-${img.id}`, `image-likes-${img.id}`, 'image-modal-likes');
+        setupCommentSection('image', img.id, 'image-modal-comment-input', 'image-modal-comment-count', 'image-modal-comment-section');
+        setupMoreComments('image', img.id, 'image-modal-more-comments', 'image-modal-comment-section');
+        setupDeleteButton(`image-delete-btn-${img.id}`, `image-id="${img.id}"`, 'image-feed');
+      }
+    }
+
+    // Geschichten rendern
+    let storyCounter = stories.reduce((max, story) => Math.max(max, story.id), 0);
+    function renderStories() {
+      const feed = document.getElementById('story-feed');
+      feed.innerHTML = '';
+      if (stories.length === 0) {
+        feed.innerHTML = '<p class="text-sm text-gray-600">Keine Inhalte vorhanden.</p>';
+        return;
+      }
+      stories.forEach(story => {
+        const card = document.createElement('div');
+        card.className = 'card p-4 m-4 w-full max-w-md';
+        card.dataset.storyId = story.id;
+        card.innerHTML = `
+          <h3 class="text-xl font-bold text-[#cc99ff]">${story.title}</h3>
+          <p class="text-sm text-gray-600 mt-2">Kategorie: ${story.category}</p>
+          <p class="text-base text-gray-700 mt-2 line-clamp-3">${story.content}</p>
+          <div class="flex justify-between mt-3 text-base text-[#cc99ff]">
+            <span id="story-likes-${story.id}">❤️ ${story.likes}</span>
+            <span>💬 <span id="story-comment-count-${story.id}">${story.comments.length}</span></span>
+            <span>👀 <span id="story-views-${story.id}">${story.views}</span></span>
+          </div>
+          <button id="story-like-btn-${story.id}" class="action-btn mt-3 w-full">Like</button>
+          <div id="story-comment-section-${story.id}" class="comment-section w-full mt-3">${story.comments.map(c => `<div class="text-sm text-gray-600 border-t pt-2">${c}</div>`).join('')}</div>
+          <button id="story-more-comments-${story.id}" class="text-blue-500 text-sm mt-2 ${story.comments.length > 0 ? '' : 'hidden'}">Mehr anzeigen</button>
+          <div class="w-full mt-3">
+            <textarea id="story-comment-input-${story.id}" class="h-16" placeholder="Dein Kommentar..."></textarea>
+            <button id="story-submit-comment-${story.id}" class="action-btn mt-2 w-full">Kommentieren</button>
+          </div>
+          <div class="w-full mt-2">
+            <label for="story-delete-code-${story.id}">Lösch-Code</label>
+            <input type="text" id="story-delete-code-${story.id}" placeholder="Code eingeben"/>
+            <button id="story-delete-btn-${story.id}" class="delete-btn mt-2 w-full">Geschichte löschen</button>
+          </div>
+        `;
+        feed.appendChild(card);
+        setupStoryModal(story.id);
+        setupLikeButton(`story-like-btn-${story.id}`, `story-likes-${story.id}`, 'story-modal-likes');
+        setupCommentSection('story', story.id, 'story-modal-comment-input', 'story-modal-comment-count', 'story-modal-comment-section');
+        setupMoreComments('story', story.id, 'story-modal-more-comments', 'story-modal-comment-section');
+        setupDeleteButton(`story-delete-btn-${story.id}`, `story-id="${story.id}"`, 'story-feed');
+      });
+    }
+
+    // Admin-Daten rendern
+    function renderAdmin() {
+      const avatarImg = document.getElementById('admin-avatar');
+      const totalViewsSpan = document.getElementById('total-views');
+      const monthlyViewsSpan = document.getElementById('monthly-views');
+      const subscribersSpan = document.getElementById('subscribers');
+      const subscribeBtn = document.getElementById('subscribe-btn');
+      if (avatarImg && totalViewsSpan && monthlyViewsSpan && subscribersSpan && subscribeBtn) {
+        avatarImg.src = adminData.avatar;
+        totalViewsSpan.textContent = adminData.totalViews;
+        monthlyViewsSpan.textContent = adminData.monthlyViews;
+        subscribersSpan.textContent = adminData.subscribers;
+        subscribeBtn.textContent = adminData.isSubscribed ? 'Deabonnieren' : 'Abonnieren';
+      }
+    }
+
+    // Initiales Rendern
+    initDB().then(() => {
+      renderImages();
+      renderStories();
+      renderAdmin();
+    }).catch(err => {
+      console.error(err);
+      alert('Fehler beim Initialisieren der Datenbank. Bilder-Uploads könnten nicht funktionieren.');
+    });
+
+    // Bilder-Upload
+    function addImageCard(image) {
+      images.push(image);
+      saveImage(image).then(() => renderImages()).catch(err => {
+        console.error(err);
+        alert('Fehler beim Speichern des Bildes.');
+      });
+    }
+
+    const imageInput = document.getElementById('image-file');
+    const imageCategorySelect = document.getElementById('image-category');
+    const submitImageBtn = document.getElementById('submit-image');
+    if (imageInput && imageCategorySelect && submitImageBtn) {
+      submitImageBtn.addEventListener('click', () => {
+        const files = imageInput.files;
+        const category = imageCategorySelect.value;
+        if (files.length > 0) {
+          let loadedImages = 0;
+          Array.from(files).forEach((file, index) => {
+            if (file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024) { // Max 10MB pro Bild
+              const newId = imageCounter + index + 1;
+              const newImage = {
+                id: newId,
+                blob: file,
+                category,
+                likes: 0,
+                comments: [],
+                views: 0
+              };
+              addImageCard(newImage);
+              loadedImages++;
+              if (loadedImages === files.length) {
+                imageCounter += files.length;
+                imageInput.value = '';
+                imageCategorySelect.value = 'Fanart';
+                alert('Bild(er) hochgeladen!');
+              }
+            } else {
+              alert(`Bild ${file.name} ist zu groß (max. 10MB) oder ungültig.`);
+              loadedImages++;
+              if (loadedImages === files.length) {
+                imageCounter += files.length;
+                imageInput.value = '';
+                imageCategorySelect.value = 'Fanart';
+                alert('Gültige Bilder hochgeladen!');
+              }
+            }
+          });
+        } else {
+          alert('Bitte wähle mindestens ein Bild aus!');
+        }
+      });
+    }
+
+    // Geschichten-Upload
+    function addStoryCard(story) {
+      stories.push(story);
+      saveData();
+      renderStories();
+    }
+
+    const storyTitleInput = document.getElementById('story-title');
+    const storyCategorySelect = document.getElementById('story-category');
+    const storyTextInput = document.getElementById('story-text');
+    const submitStoryBtn = document.getElementById('submit-story');
+    if (storyTitleInput && storyCategorySelect && storyTextInput && submitStoryBtn) {
+      submitStoryBtn.addEventListener('click', () => {
+        const title = storyTitleInput.value.trim();
+        const category = storyCategorySelect.value;
+        const content = storyTextInput.value.trim();
+        if (title && content) {
+          const newStory = {
+            id: storyCounter + 1,
+            title,
+            category,
+            content,
+            likes: 0,
+            comments: [],
+            views: 0
+          };
+          addStoryCard(newStory);
+          storyCounter += 1;
+          storyTitleInput.value = '';
+          storyCategorySelect.value = 'Shonen';
+          storyTextInput.value = '';
+          alert('Geschichte hochgeladen!');
+        } else {
+          alert('Bitte gib einen Titel und Text ein!');
+        }
+      });
+    }
+
+    // Bild-Modal
+    function setupImageModal(imageId) {
+      const card = document.querySelector(`[data-image-id="${imageId}"]`);
+      const modal = document.getElementById('image-modal');
+      const modalImg = document.getElementById('modal-image');
+      const modalCategory = document.getElementById('modal-image-category');
+      const closeBtn = document.getElementById('close-image-modal');
+      const likes = document.getElementById(`image-likes-${imageId}`);
+      const commentCount = document.getElementById(`image-comment-count-${imageId}`);
+      const views = document.getElementById(`image-views-${imageId}`);
+      const commentSection = document.getElementById(`image-comment-section-${imageId}`);
+      const modalLikes = document.getElementById('image-modal-likes');
+      const modalCommentCount = document.getElementById('image-modal-comment-count');
+      const modalViews = document.getElementById('image-modal-views');
+      const modalCommentSection = document.getElementById('image-modal-comment-section');
+      if (card && modal && modalImg && modalCategory && closeBtn && likes && commentCount && views && commentSection) {
+        card.addEventListener('click', (e) => {
+          if (e.target.closest('button') || e.target.closest('textarea') || e.target.closest('input')) return;
+          const image = images.find(img => img.id === imageId);
+          if (image) {
+            modalImg.src = URL.createObjectURL(image.blob);
+            modalCategory.textContent = `Kategorie: ${image.category}`;
+            modalLikes.textContent = `❤️ ${image.likes}`;
+            modalCommentCount.textContent = image.comments.length;
+            modalViews.textContent = image.views;
+            modalCommentSection.innerHTML = image.comments.map(c => `<div class="text-sm text-gray-600 border-t pt-2">${c}</div>`).join('');
+            modal.classList.remove('hidden');
+          }
+        });
+        closeBtn.addEventListener('click', () => {
+          modal.classList.add('hidden');
+        });
+      }
+    }
+
+    // Geschichten-Modal
+    function setupStoryModal(storyId) {
+      const card = document.querySelector(`[data-story-id="${storyId}"]`);
+      const modal = document.getElementById('story-modal');
+      const title = document.getElementById('story-modal-title');
+      const category = document.getElementById('modal-story-category');
+      const content = document.getElementById('story-modal-content');
+      const likes = document.getElementById('story-modal-likes');
+      const commentCount = document.getElementById('story-modal-comment-count');
+      const views = document.getElementById('story-modal-views');
+      const commentSection = document.getElementById('story-modal-comment-section');
+      const closeBtn = document.getElementById('close-story-modal');
+      if (card && modal && title && category && content && likes && commentCount && views && commentSection && closeBtn) {
+        card.addEventListener('click', (e) => {
+          if (e.target.closest('button') || e.target.closest('textarea') || e.target.closest('input')) return;
+          const story = stories.find(s => s.id === storyId);
+          if (story) {
+            title.textContent = story.title;
+            category.textContent = `Kategorie: ${story.category}`;
+            content.textContent = story.content;
+            likes.textContent = `❤️ ${story.likes}`;
+            commentCount.textContent = story.comments.length;
+            views.textContent = story.views;
+            commentSection.innerHTML = story.comments.map(c => `<div class="text-sm text-gray-600 border-t pt-2">${c}</div>`).join('');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+              story.views += 1;
+              adminData.totalViews += 1;
+              adminData.monthlyViews += 1;
+              views.textContent = story.views;
+              document.getElementById(`story-views-${storyId}`).textContent = story.views;
+              document.getElementById('total-views').textContent = adminData.totalViews;
+              document.getElementById('monthly-views').textContent = adminData.monthlyViews;
+              saveData();
+            }, 10000);
+          }
+        });
+        closeBtn.addEventListener('click', () => {
+          modal.classList.add('hidden');
+        });
+      }
+    }
+
+    // Like-Funktion
+    function setupLikeButton(btnId, likeId, modalLikeId) {
+      const btn = document.getElementById(btnId);
+      const likeSpan = document.getElementById(likeId);
+      const modalLikeSpan = document.getElementById(modalLikeId);
+      if (btn && likeSpan) {
+        btn.addEventListener('click', async () => {
+          const id = parseInt(likeId.split('-').pop());
+          const isImage = likeId.includes('image');
+          const dataArray = isImage ? images : stories;
+          const item = dataArray.find(i => i.id === id);
+          if (item) {
+            item.likes += 1;
+            likeSpan.textContent = `❤️ ${item.likes}`;
+            if (modalLikeSpan) modalLikeSpan.textContent = `❤️ ${item.likes}`;
+            if (isImage) {
+              await saveImage(item);
+              renderImages();
+            } else {
+              saveData();
+            }
+          }
+        });
+      }
+    }
+
+    // Kommentar-Funktion
+    function setupCommentSection(type, postId, modalCommentId, modalCommentCountId, modalCommentSectionId) {
+      const commentInput = document.getElementById(`${type}-comment-input-${postId}`);
+      const submitBtn = document.getElementById(`${type}-submit-comment-${postId}`);
+      const commentSection = document.getElementById(`${type}-comment-section-${postId}`);
+      const commentCount = document.getElementById(`${type}-comment-count-${postId}`);
+      const modalCommentInput = document.getElementById(modalCommentId);
+      const modalSubmitBtn = document.getElementById(modalCommentId.replace('input', 'submit-comment'));
+      const modalCommentSection = document.getElementById(modalCommentSectionId);
+      const modalCommentCount = document.getElementById(modalCommentCountId);
+      const moreBtn = document.getElementById(`${type}-more-comments-${postId}`);
+      const modalMoreBtn = document.getElementById(modalCommentSectionId.replace('section', 'more-comments'));
+      const dataArray = type === 'image' ? images : stories;
+      const item = dataArray.find(i => i.id === postId);
+      if (submitBtn && commentInput && commentSection && commentCount && item) {
+        submitBtn.addEventListener('click', async () => {
+          const commentText = commentInput.value.trim();
+          if (commentText) {
+            item.comments.push(`User: ${commentText}`);
+            commentSection.innerHTML = item.comments.map(c => `<div class="text-sm text-gray-600 border-t pt-2">${c}</div>`).join('');
+            if (modalCommentSection) modalCommentSection.innerHTML = commentSection.innerHTML;
+            commentInput.value = '';
+            commentCount.textContent = item.comments.length;
+            if (modalCommentCount) modalCommentCount.textContent = item.comments.length;
+            moreBtn.classList.remove('hidden');
+            if (modalMoreBtn) modalMoreBtn.classList.remove('hidden');
+            if (type === 'image') {
+              await saveImage(item);
+              renderImages();
+            } else {
+              saveData();
+            }
+          }
+        });
+      }
+      if (modalSubmitBtn && modalCommentInput && modalCommentSection && modalCommentCount && item) {
+        modalSubmitBtn.addEventListener('click', async () => {
+          const commentText = modalCommentInput.value.trim();
+          if (commentText) {
+            item.comments.push(`User: ${commentText}`);
+            modalCommentSection.innerHTML = item.comments.map(c => `<div class="text-sm text-gray-600 border-t pt-2">${c}</div>`).join('');
+            if (commentSection) commentSection.innerHTML = modalCommentSection.innerHTML;
+            modalCommentInput.value = '';
+            modalCommentCount.textContent = item.comments.length;
+            if (commentCount) commentCount.textContent = item.comments.length;
+            modalMoreBtn.classList.remove('hidden');
+            if (moreBtn) moreBtn.classList.remove('hidden');
+            if (type === 'image') {
+              await saveImage(item);
+              renderImages();
+            } else {
+              saveData();
+            }
+          }
+        });
+      }
+    }
+
+    // Mehr/Weniger anzeigen für Kommentare
+    function setupMoreComments(type, postId, modalMoreId, modalSectionId) {
+      const moreBtn = document.getElementById(`${type}-more-comments-${postId}`);
+      const commentSection = document.getElementById(`${type}-comment-section-${postId}`);
+      const modalMoreBtn = document.getElementById(modalMoreId);
+      const modalCommentSection = document.getElementById(modalSectionId);
+      if (moreBtn && commentSection) {
+        moreBtn.addEventListener('click', () => {
+          const isExpanded = commentSection.classList.contains('expanded');
+          commentSection.classList.toggle('expanded');
+          moreBtn.textContent = isExpanded ? 'Mehr anzeigen' : 'Weniger anzeigen';
+          if (modalCommentSection && modalMoreBtn) {
+            modalCommentSection.classList.toggle('expanded');
+            modalMoreBtn.textContent = isExpanded ? 'Mehr anzeigen' : 'Weniger anzeigen';
+          }
+        });
+      }
+      if (modalMoreBtn && modalCommentSection) {
+        modalMoreBtn.addEventListener('click', () => {
+          const isExpanded = modalCommentSection.classList.contains('expanded');
+          modalCommentSection.classList.toggle('expanded');
+          modalMoreBtn.textContent = isExpanded ? 'Mehr anzeigen' : 'Weniger anzeigen';
+          if (commentSection && moreBtn) {
+            commentSection.classList.toggle('expanded');
+            moreBtn.textContent = isExpanded ? 'Mehr anzeigen' : 'Weniger anzeigen';
+          }
+        });
+      }
+    }
+
+    // Löschfunktion
+    function setupDeleteButton(btnId, contentId, containerId) {
+      const btn = document.getElementById(btnId);
+      const content = document.querySelector(`[data-${contentId}]`);
+      const codeInput = document.getElementById(btnId.replace('btn', 'code'));
+      if (btn && content && codeInput) {
+        btn.addEventListener('click', async () => {
+          if (codeInput.value === 'Chimaking1') {
+            const id = parseInt(contentId.split('=')[1].replace('"', ''));
+            const isImage = contentId.includes('image');
+            const dataArray = isImage ? images : stories;
+            const index = dataArray.findIndex(i => i.id === id);
+            if (index !== -1) {
+              dataArray.splice(index, 1);
+              content.remove();
+              const container = document.getElementById(containerId);
+              if (container && container.children.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-600">Keine Inhalte vorhanden.</p>';
+              }
+              if (isImage) {
+                await deleteImage(id);
+                renderImages();
+              } else {
+                saveData();
+                renderStories();
+              }
+              alert('Inhalt gelöscht!');
+              codeInput.value = '';
+            }
+          } else {
+            alert('Falscher Lösch-Code!');
+          }
+        });
+      }
+    }
+
+    // Drag-and-Drop für Avatar
+    const dropzone = document.getElementById('avatar-dropzone');
+    const avatarImg = document.getElementById('admin-avatar');
+    const avatarInput = document.getElementById('avatar-file');
+    if (dropzone && avatarImg && avatarInput) {
+      dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+      });
+      dropzone.addEventListener('dragleave', () => {
+        dropzone.classList.remove('dragover');
+      });
+      dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/') && file.size < 2 * 1024 * 1024) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            adminData.avatar = event.target.result;
+            avatarImg.src = adminData.avatar;
+            saveData();
+          };
+          reader.readAsDataURL(file);
+        } else {
+          alert('Avatar-Bild ist zu groß (max. 2MB) oder ungültig.');
+        }
+      });
+      dropzone.addEventListener('click', () => {
+        avatarInput.click();
+      });
+      avatarInput.addEventListener('change', () => {
+        const file = avatarInput.files[0];
+        if (file && file.type.startsWith('image/') && file.size < 2 * 1024 * 1024) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            adminData.avatar = event.target.result;
+            avatarImg.src = adminData.avatar;
+            saveData();
+          };
+          reader.readAsDataURL(file);
+        } else {
+          alert('Avatar-Bild ist zu groß (max. 2MB) oder ungültig.');
+        }
+      });
+    }
+
+    // Abonnieren/Deabonnieren
+    const subscribeBtn = document.getElementById('subscribe-btn');
+    const subscribersSpan = document.getElementById('subscribers');
+    if (subscribeBtn && subscribersSpan) {
+      subscribeBtn.addEventListener('click', () => {
+        if (!adminData.isSubscribed) {
+          adminData.subscribers += 1;
+          subscribeBtn.textContent = 'Deabonnieren';
+          adminData.isSubscribed = true;
+        } else {
+          adminData.subscribers -= 1;
+          subscribeBtn.textContent = 'Abonnieren';
+          adminData.isSubscribed = false;
+        }
+        subscribersSpan.textContent = adminData.subscribers;
+        saveData();
+      });
+    }
+  </script>
+</body>
+</html>
