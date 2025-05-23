@@ -1,0 +1,277 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>KI Wallpaper App</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background-color: #0a0a0a;
+      color: white;
+    }
+
+    header {
+      padding: 16px;
+      text-align: center;
+      background: #111;
+      font-size: 20px;
+      font-weight: bold;
+      color: #0af;
+    }
+
+    .categories {
+      display: flex;
+      overflow-x: auto;
+      gap: 10px;
+      padding: 10px;
+      background: #111;
+    }
+
+    .category-pill {
+      background: #222;
+      padding: 8px 14px;
+      border-radius: 20px;
+      white-space: nowrap;
+      cursor: pointer;
+      border: 1px solid transparent;
+    }
+
+    .category-pill.active,
+    .category-pill:hover {
+      background: #0af;
+      color: black;
+      border-color: #0af;
+    }
+
+    .gallery {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      padding: 10px;
+    }
+
+    .card {
+      background: #1a1a1a;
+      border-radius: 12px;
+      overflow: hidden;
+      width: 45%;
+      min-width: 160px;
+      max-width: 240px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card img {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-bottom: 1px solid #333;
+    }
+
+    .card .actions {
+      padding: 10px;
+      text-align: center;
+    }
+
+    .card .actions button {
+      background: #0af;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      color: black;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .upload-button {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0af;
+      color: black;
+      border: none;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      font-size: 32px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 0 10px #0af;
+      z-index: 100;
+    }
+
+    .upload-form {
+      display: none;
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #111;
+      padding: 20px;
+      border-radius: 12px;
+      z-index: 101;
+      width: 90%;
+      max-width: 400px;
+    }
+
+    .upload-form input, .upload-form button {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 10px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+    }
+
+    .upload-form button {
+      background: #0af;
+      color: black;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .upload-form .category-pill {
+      background: #222;
+      padding: 6px 12px;
+      margin: 4px;
+      border-radius: 20px;
+      display: inline-block;
+      cursor: pointer;
+    }
+
+    .upload-form .category-pill.active {
+      background: #0af;
+      color: black;
+    }
+  </style>
+</head>
+<body>
+
+<header>KI Hintergrundbilder</header>
+
+<div class="categories" id="categoryList"></div>
+
+<div class="gallery" id="gallery"></div>
+
+<!-- Upload Button + Formular -->
+<button class="upload-button" onclick="toggleUpload()">+</button>
+
+<div class="upload-form" id="uploadForm">
+  <input type="file" id="imageInput" accept="image/*" />
+  <div id="uploadCategories"></div>
+  <input type="text" id="newCategoryInput" placeholder="Oder neue Kategorie erstellen..." oninput="clearSelectedCategory()" />
+  <button onclick="handleUpload()">Hochladen</button>
+</div>
+
+<script>
+  const categories = new Set(["Anime", "Mafia", "Cyberpunk", "Nature"]);
+  let selectedCategory = "Anime";
+  let uploadSelectedCategory = null;
+  const allImages = [];
+
+  function toggleUpload() {
+    const form = document.getElementById('uploadForm');
+    form.style.display = form.style.display === 'block' ? 'none' : 'block';
+    updateUploadCategoryList();
+  }
+
+  function updateCategoryList() {
+    const list = document.getElementById('categoryList');
+    list.innerHTML = '';
+    Array.from(categories).slice(0, 20).forEach(cat => {
+      const el = document.createElement('div');
+      el.className = 'category-pill' + (selectedCategory === cat ? ' active' : '');
+      el.textContent = cat;
+      el.onclick = () => {
+        selectedCategory = cat;
+        updateCategoryList();
+        renderGallery();
+      };
+      list.appendChild(el);
+    });
+  }
+
+  function updateUploadCategoryList() {
+    const list = document.getElementById('uploadCategories');
+    list.innerHTML = '';
+    Array.from(categories).slice(0, 20).forEach(cat => {
+      const el = document.createElement('div');
+      el.className = 'category-pill' + (uploadSelectedCategory === cat ? ' active' : '');
+      el.textContent = cat;
+      el.onclick = () => {
+        uploadSelectedCategory = cat;
+        document.getElementById("newCategoryInput").value = "";
+        updateUploadCategoryList();
+      };
+      list.appendChild(el);
+    });
+  }
+
+  function clearSelectedCategory() {
+    uploadSelectedCategory = null;
+    updateUploadCategoryList();
+  }
+
+  function handleUpload() {
+    const fileInput = document.getElementById('imageInput');
+    const newCategory = document.getElementById('newCategoryInput').value.trim();
+    const category = newCategory || uploadSelectedCategory || 'Unbenannt';
+    const file = fileInput.files[0];
+
+    if (!file) return alert("Bitte ein Bild auswählen.");
+    if (newCategory) categories.add(newCategory);
+    updateCategoryList();
+
+    const reader = new FileReader();
+    reader.onload = function(event) {
+      allImages.push({ src: event.target.result, category });
+
+      document.getElementById('uploadForm').style.display = 'none';
+      fileInput.value = '';
+      document.getElementById('newCategoryInput').value = '';
+      uploadSelectedCategory = null;
+      renderGallery();
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+  function renderGallery() {
+    const gallery = document.getElementById('gallery');
+    gallery.innerHTML = '';
+    allImages.filter(img => img.category === selectedCategory).forEach(data => {
+      const card = document.createElement('div');
+      card.className = 'card';
+
+      const img = document.createElement('img');
+      img.src = data.src;
+
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+
+      const btn = document.createElement('button');
+      btn.textContent = 'Download';
+      btn.onclick = () => {
+        const a = document.createElement('a');
+        a.href = img.src;
+        a.download = data.category + '_wallpaper.jpg';
+        a.click();
+      };
+
+      actions.appendChild(btn);
+      card.appendChild(img);
+      card.appendChild(actions);
+      gallery.appendChild(card);
+    });
+  }
+
+  updateCategoryList();
+  renderGallery();
+</script>
+
+</body>
+</html>
