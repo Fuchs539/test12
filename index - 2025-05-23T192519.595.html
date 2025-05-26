@@ -1,0 +1,320 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anime-Hintergrundbilder App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-image: url('https://images.unsplash.com/photo-1542051841857-5f90071e7989?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+      background-size: cover;
+      background-attachment: fixed;
+      background-position: center;
+      font-family: 'Arial', sans-serif;
+    }
+    .anime-text {
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+      color: #fff;
+    }
+    .glass {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+  <div class="text-center mb-8">
+    <h1 class="text-4xl md:text-6xl font-bold anime-text">Anime Schrein Galerie</h1>
+    <p class="text-lg md:text-xl anime-text mt-2">Lade bis zu 1 GB an Bildern hoch, benenne sie und finde sie!</p>
+  </div>
+
+  <div class="w-full max-w-4xl glass rounded-lg p-6">
+    <div class="mb-6">
+      <label class="block text-lg anime-text mb-2" for="imageUpload">Wähle ein Bild aus:</label>
+      <input type="file" id="imageUpload" accept="image/*" class="w-full p-2 rounded bg-white/20 text-white mb-2">
+      <label class="block text-lg anime-text mb-2" for="imageName">Bildname:</label>
+      <input type="text" id="imageName" placeholder="z. B. Sonnenuntergang Schrein" class="w-full p-2 rounded bg-white/20 text-white mb-2" maxlength="50">
+      <button id="uploadBtn" class="mt-4 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition">Hochladen</button>
+      <p id="uploadFeedback" class="text-sm text-green-300 mt-2 hidden">Bild erfolgreich hochgeladen!</p>
+      <p id="errorFeedback" class="text-sm text-red-300 mt-2 hidden">Fehler: Speicher voll oder Bild zu groß!</p>
+    </div>
+
+    <div class="mb-6">
+      <label class="block text-lg anime-text mb-2" for="searchInput">Suche nach Bildern:</label>
+      <input type="text" id="searchInput" placeholder="Bildname eingeben..." class="w-full p-2 rounded bg-white/20 text-white">
+    </div>
+
+    <div id="gallery" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+      <!-- Bilder werden hier dynamisch eingefügt -->
+    </div>
+  </div>
+
+  <script>
+    // IndexedDB-Konfiguration
+    let db;
+    const dbName = 'AnimeBackgroundsDB';
+    const storeName = 'images';
+    const maxStorage = 1 * 1024 * 1024 * 1024; // 1 GB
+    let currentStorageSize = 0;
+    let isDbReady = false;
+
+    // IndexedDB initialisieren
+    async function initDb() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(dbName, 3); // Version erhöht für Migration
+        request.onupgradeneeded = (event) => {
+          db = event.target.result;
+          let store;
+          if (!db.objectStoreNames.contains(storeName)) {
+            store = db.createObjectStore(storeName, { keyPath: 'id', autoIncrement: true });
+            store.createIndex('name', 'name', { unique: false });
+          } else {
+            // Öffne bestehenden Store für Migration
+            store = event.target.transaction.objectStore(storeName);
+            if (!store.indexNames.contains('name')) {
+              store.createIndex('name', 'name', { unique: false });
+            }
+            // Migration: Weise bestehenden Bildern ohne Namen einen Standardnamen zu
+            store.openCursor().onsuccess = (e) => {
+              const cursor = e.target.result;
+              if (cursor) {
+                if (!cursor.value.name) {
+                  cursor.update({ ...cursor.value, name: `Bild_${cursor.value.id || Date.now()}` });
+                }
+                cursor.continue();
+              }
+            };
+          }
+        };
+        request.onsuccess = (event) => {
+          db = event.target.result;
+          isDbReady = true;
+          resolve();
+        };
+        request.onerror = () => {
+          reject('Fehler beim Öffnen der Datenbank.');
+        };
+      });
+    }
+
+    // Funktion zum Komprimieren eines Bildes
+    async function compressImage(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          img.src = e.target.result;
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const maxWidth = 1200;
+            const maxHeight = 1200;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+              if (width > maxWidth) {
+                height *= maxWidth / width;
+                width = maxWidth;
+              }
+            } else {
+              if (height > maxHeight) {
+                width *= maxHeight / height;
+                height = maxHeight;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            ctx.drawImage(img, 0, 0, width, height);
+
+            canvas.toBlob((blob) => {
+              const compressedReader = new FileReader();
+              compressedReader.onload = () => resolve({ dataUrl: compressedReader.result, size: blob.size });
+              compressedReader.onerror = () => reject('Fehler beim Komprimieren des Bildes.');
+              compressedReader.readAsDataURL(blob);
+            }, 'image/jpeg', 0.8);
+          };
+          img.onerror = () => reject('Fehler beim Laden des Bildes.');
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // Funktion zum Speichern eines Bildes
+    async function saveImage(imageData, size, name) {
+      if (!isDbReady) {
+        throw new Error('Datenbank nicht bereit.');
+      }
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([storeName], 'readwrite');
+        const store = transaction.objectStore(storeName);
+        const request = store.add({ data: imageData, size: size, name: name || `Bild_${Date.now()}` });
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject('Fehler beim Speichern des Bildes.');
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject('Transaktionsfehler.');
+      });
+    }
+
+    // Funktion zum Laden und Anzeigen der Bilder
+    async function loadImages(searchQuery = '') {
+      if (!isDbReady) {
+        throw new Error('Datenbank nicht bereit.');
+      }
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([storeName], 'readonly');
+        const store = transaction.objectStore(storeName);
+        const request = store.getAll();
+        request.onsuccess = () => {
+          let images = request.result;
+          currentStorageSize = images.reduce((sum, img) => sum + (img.size || 0), 0);
+          if (searchQuery) {
+            images = images.filter(img => (img.name || '').toLowerCase().includes(searchQuery.toLowerCase()));
+          }
+          displayImages(images);
+          resolve(images);
+        };
+        request.onerror = () => reject('Fehler beim Laden der Bilder.');
+      });
+    }
+
+    // Funktion zum Anzeigen der Bilder
+    function displayImages(images) {
+      const gallery = document.getElementById('gallery');
+      gallery.innerHTML = '';
+      images.forEach((img, index) => {
+        const imgContainer = document.createElement('div');
+        imgContainer.className = 'relative group';
+        imgContainer.innerHTML = `
+          <img src="${img.data}" alt="${img.name || 'Bild'}" class="w-full h-48 object-cover rounded">
+          <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+            <a href="${img.data}" download="${img.name || 'Bild'}.jpg" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded">Download</a>
+          </div>
+          <p class="text-center text-sm anime-text mt-2">${img.name || 'Bild'}</p>
+        `;
+        gallery.appendChild(imgContainer);
+      });
+    }
+
+    // Funktion zum Anzeigen von Fehlermeldungen
+    function showError(message) {
+      const errorFeedback = document.getElementById('errorFeedback');
+      errorFeedback.textContent = message;
+      errorFeedback.classList.remove('hidden');
+      setTimeout(() => errorFeedback.classList.add('hidden'), 5000);
+    }
+
+    // Event-Listener für den Upload-Button
+    document.getElementById('uploadBtn').addEventListener('click', async () => {
+      const input = document.getElementById('imageUpload');
+      const nameInput = document.getElementById('imageName');
+      const feedback = document.getElementById('uploadFeedback');
+
+      try {
+        if (!isDbReady) {
+          await initDb();
+        }
+
+        if (!input.files || !input.files[0]) {
+          showError('Bitte wähle ein Bild aus!');
+          return;
+        }
+
+        // Prüfen, ob das Bild zu groß ist (max. 100 MB pro Bild)
+        if (input.files[0].size > 100 * 1024 * 1024) {
+          showError('Bild ist zu groß! Maximal 100 MB pro Bild.');
+          return;
+        }
+
+        const imageName = nameInput.value.trim();
+        if (imageName.length > 50) {
+          showError('Bildname zu lang! Maximal 50 Zeichen.');
+          return;
+        }
+
+        const { dataUrl, size } = await compressImage(input.files[0]);
+
+        // Prüfen, ob genug Speicherplatz vorhanden ist
+        if (currentStorageSize + size > maxStorage) {
+          showError('Speicher voll! Maximal 1 GB erreicht. Weitere Uploads nicht möglich.');
+          return;
+        }
+
+        await saveImage(dataUrl, size, imageName);
+        await loadImages();
+        input.value = ''; // Reset input
+        nameInput.value = ''; // Reset name input
+        feedback.classList.remove('hidden');
+        setTimeout(() => feedback.classList.add('hidden'), 3000);
+      } catch (error) {
+        showError(error.message || 'Fehler beim Hochladen des Bildes.');
+      }
+    });
+
+    // Event-Listener für die Suchleiste
+    document.getElementById('searchInput').addEventListener('input', async (e) => {
+      try {
+        if (!isDbReady) {
+          await initDb();
+        }
+        const searchQuery = e.target.value.trim();
+        await loadImages(searchQuery);
+      } catch (error) {
+        showError(error.message || 'Fehler bei der Suche.');
+      }
+    });
+
+    // Initiale Datenbankinitialisierung und Laden der Bilder
+    (async () => {
+      try {
+        await initDb();
+        await loadImages();
+      } catch (error) {
+        showError(error.message || 'Fehler beim Starten der App.');
+      }
+    })();
+  </script>
+</body>
+</html>
