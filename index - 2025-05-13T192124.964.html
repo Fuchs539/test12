@@ -1,0 +1,339 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KI-Music Galaxy</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/particles.js/2.0.0/particles.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.7.2/dist/axios.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Montserrat:wght@400;500&display=swap');
+    body {
+      background: #0d0c1d;
+      color: #ffffff;
+      font-family: 'Montserrat', sans-serif;
+    }
+    h1, h2, h3 {
+      font-family: 'Orbitron', sans-serif;
+    }
+    .neon-hover {
+      transition: all 0.3s ease;
+    }
+    .neon-hover:hover {
+      box-shadow: 0 0 10px #00f0ff, 0 0 20px #8f00ff;
+      transform: scale(1.05);
+    }
+    #particles-js {
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // Mock-Daten für Trending-Tracks
+    const mockTracks = [
+      { id: 1, title: "Nebula Beats", artist: "Suno AI", genre: "Electronic", cover: "https://via.placeholder.com/150", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
+      { id: 2, title: "Quantum Pulse", artist: "Udio AI", genre: "Synthwave", cover: "https://via.placeholder.com/150", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
+    ];
+
+    // Navigation
+    const Navbar = ({ user, setView, setUser }) => (
+      <nav className="bg-[#0d0c1d] border-b border-[#8f00ff] py-4 px-6 flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-[#00f0ff]">KI-Music Galaxy</h1>
+        <div className="space-x-4">
+          <button onClick={() => setView('home')} className="text-[#ffffff] hover:text-[#00f0ff]">Home</button>
+          <button onClick={() => setView('discover')} className="text-[#ffffff] hover:text-[#00f0ff]">Entdecken</button>
+          <button onClick={() => setView('upload')} className="text-[#ffffff] hover:text-[#00f0ff]">Hochladen</button>
+          {user ? (
+            <>
+              <button onClick={() => setView('profile')} className="text-[#ffffff] hover:text-[#00f0ff]">{user.username}</button>
+              <button onClick={() => setUser(null)} className="text-[#ffffff] hover:text-[#00f0ff]">Logout</button>
+            </>
+          ) : (
+            <button onClick={() => setView('login')} className="text-[#ffffff] hover:text-[#00f0ff]">Login</button>
+          )}
+        </div>
+      </nav>
+    );
+
+    // Hero-Banner
+    const Hero = () => (
+      <div className="bg-gradient-to-r from-[#8f00ff] to-[#00f0ff] text-center py-20">
+        <h1 className="text-5xl font-bold mb-4">Nur KI. Nur Zukunft. Nur Sound.</h1>
+        <p className="text-xl">Entdecke und teile KI-generierte Musik in einer galaktischen Community.</p>
+      </div>
+    );
+
+    // Trending-Karussell
+    const TrendingTracks = ({ setCurrentTrack }) => (
+      <div className="py-10 px-6">
+        <h2 className="text-3xl font-bold mb-6">Trending KI-Tracks</h2>
+        <div className="flex space-x-4 overflow-x-auto">
+          {mockTracks.map(track => (
+            <div key={track.id} className="min-w-[200px] bg-[#1a1a2e] p-4 rounded-lg neon-hover cursor-pointer" onClick={() => setCurrentTrack(track)}>
+              <img src={track.cover} alt={track.title} className="w-full h-32 object-cover rounded mb-2" />
+              <h3 className="text-lg font-bold">{track.title}</h3>
+              <p className="text-sm text-[#00f0ff]">{track.artist}</p>
+              <p className="text-sm">{track.genre}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+
+    // Musik-Upload
+    const UploadForm = () => {
+      const [file, setFile] = useState(null);
+      const [title, setTitle] = useState('');
+      const [description, setDescription] = useState('');
+      const [genre, setGenre] = useState('');
+      const [aiTool, setAiTool] = useState('');
+      const [isAiConfirmed, setIsAiConfirmed] = useState(false);
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!file || !isAiConfirmed) {
+          alert('Bitte wähle eine Datei und bestätige, dass der Track KI-generiert ist.');
+          return;
+        }
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('title', title);
+        formData.append('description', description);
+        formData.append('genre', genre);
+        formData.append('aiTool', aiTool);
+
+        try {
+          // Simulierter API-Aufruf
+          console.log('Uploading to S3:', formData);
+          alert('Upload erfolgreich!');
+        } catch (error) {
+          alert('Upload fehlgeschlagen.');
+        }
+      };
+
+      return (
+        <div className="py-10 px-6 max-w-lg mx-auto">
+          <h2 className="text-3xl font-bold mb-6">Musik hochladen</h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <input type="file" accept=".mp3,.wav" onChange={(e) => setFile(e.target.files[0])} className="w-full p-2 bg-[#1a1a2e] rounded" />
+            <input type="text" placeholder="Titel" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full p-2 bg-[#1a1a2e] rounded" />
+            <textarea placeholder="Beschreibung" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full p-2 bg-[#1a1a2e] rounded" />
+            <input type="text" placeholder="Genre" value={genre} onChange={(e) => setGenre(e.target.value)} className="w-full p-2 bg-[#1a1a2e] rounded" />
+            <input type="text" placeholder="KI-Tool (z.B. Suno, Udio)" value={aiTool} onChange={(e) => setAiTool(e.target.value)} className="w-full p-2 bg-[#1a1a2e] rounded" />
+            <label className="flex items-center">
+              <input type="checkbox" checked={isAiConfirmed} onChange={(e) => setIsAiConfirmed(e.target.checked)} className="mr-2" />
+              Ich bestätige, dass dieser Track von einer KI erstellt wurde.
+            </label>
+            <button type="submit" className="w-full bg-[#8f00ff] text-white py-2 rounded neon-hover">Hochladen</button>
+          </form>
+        </div>
+      );
+    };
+
+    // Musikplayer
+    const MusicPlayer = ({ track }) => {
+      const [isPlaying, setIsPlaying] = useState(false);
+      const [volume, setVolume] = useState(1);
+      const [progress, setProgress] = useState(0);
+      const audioRef = React.useRef(new Audio(track?.url));
+
+      useEffect(() => {
+        audioRef.current.src = track?.url || '';
+        audioRef.current.volume = volume;
+        audioRef.current.ontimeupdate = () => {
+          setProgress((audioRef.current.currentTime / audioRef.current.duration) * 100);
+        };
+        return () => audioRef.current.pause();
+      }, [track]);
+
+      const togglePlay = () => {
+        if (isPlaying) {
+          audioRef.current.pause();
+        } else {
+          audioRef.current.play();
+        }
+        setIsPlaying(!isPlaying);
+      };
+
+      return track ? (
+        <div className="fixed bottom-0 w-full bg-[#1a1a2e] p-4 flex items-center space-x-4">
+          <img src={track.cover} alt={track.title} className="w-16 h-16 object-cover rounded" />
+          <div className="flex-1">
+            <h3 className="text-lg font-bold">{track.title}</h3>
+            <p className="text-sm text-[#00f0ff]">{track.artist} • {track.genre}</p>
+            <input type="range" value={progress} onChange={(e) => {
+              audioRef.current.currentTime = (e.target.value / 100) * audioRef.current.duration;
+              setProgress(e.target.value);
+            }} className="w-full" />
+          </div>
+          <button onClick={togglePlay} className="text-[#00f0ff]">{isPlaying ? 'Pause' : 'Play'}</button>
+          <input type="range" min="0" max="1" step="0.01" value={volume} onChange={(e) => {
+            setVolume(e.target.value);
+            audioRef.current.volume = e.target.value;
+          }} />
+          <button className="text-[#00f0ff]">Like</button>
+          <button className="text-[#00f0ff]">Kommentieren</button>
+          <button className="text-[#00f0ff]">Teilen</button>
+        </div>
+      ) : null;
+    };
+
+    // Login-Formular
+    const LoginForm = ({ setUser, setView }) => {
+      const [username, setUsername] = useState('');
+      const [password, setPassword] = useState('');
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        try {
+          // Simulierter API-Aufruf
+          setUser({ username });
+          setView('home');
+        } catch (error) {
+          alert('Login fehlgeschlagen.');
+        }
+      };
+
+      return (
+        <div className="py-10 px-6 max-w-lg mx-auto">
+          <h2 className="text-3xl font-bold mb-6">Login</h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <input type="text" placeholder="Benutzername" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-2 bg-[#1a1a2e] rounded" />
+            <input type="password" placeholder="Passwort" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-2 bg-[#1a1a2e] rounded" />
+            <button type="submit" className="w-full bg-[#8f00ff] text-white py-2 rounded neon-hover">Einloggen</button>
+            <p className="text-center">Noch kein Konto? <button onClick={() => setView('register')} className="text-[#00f0ff]">Registrieren</button></p>
+          </form>
+        </div>
+      );
+    };
+
+    // Registrierungs-Formular
+    const RegisterForm = ({ setUser, setView }) => {
+      const [username, setUsername] = useState('');
+      const [password, setPassword] = useState('');
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        try {
+          // Simulierter API-Aufruf
+          setUser({ username });
+          setView('home');
+        } catch (error) {
+          alert('Registrierung fehlgeschlagen.');
+        }
+      };
+
+      return (
+        <div className="py-10 px-6 max-w-lg mx-auto">
+          <h2 className="text-3xl font-bold mb-6">Registrieren</h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <input type="text" placeholder="Benutzername" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-2 bg-[#1a1a2e] rounded" />
+            <input type="password" placeholder="Passwort" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-2 bg-[#1a1a2e] rounded" />
+            <button type="submit" className="w-full bg-[#8f00ff] text-white py-2 rounded neon-hover">Registrieren</button>
+            <p className="text-center">Bereits ein Konto? <button onClick={() => setView('login')} className="text-[#00f0ff]">Einloggen</button></p>
+          </form>
+        </div>
+      );
+    };
+
+    // Profilseite
+    const Profile = ({ user }) => (
+      <div className="py-10 px-6">
+        <h2 className="text-3xl font-bold mb-6">Profil: {user.username}</h2>
+        <p>Hier werden deine hochgeladenen Tracks angezeigt.</p>
+      </div>
+    );
+
+    // Haupt-App
+    const App = () => {
+      const [view, setView] = useState('home');
+      const [user, setUser] = useState(null);
+      const [currentTrack, setCurrentTrack] = useState(null);
+
+      useEffect(() => {
+        particlesJS('particles-js', {
+          particles: {
+            number: { value: 80, density: { enable: true, value_area: 800 } },
+            color: { value: ['#8f00ff', '#00f0ff'] },
+            shape: { type: 'circle' },
+            opacity: { value: 0.5 },
+            size: { value: 3, random: true },
+            move: { enable: true, speed: 1, direction: 'none', random: true }
+          }
+        });
+      }, []);
+
+      return (
+        <div>
+          <div id="particles-js"></div>
+          <Navbar user={user} setView={setView} setUser={setUser} />
+          {view === 'home' && (
+            <>
+              <Hero />
+              <TrendingTracks setCurrentTrack={setCurrentTrack} />
+            </>
+          )}
+          {view === 'discover' && <div className="py-10 px-6"><h2 className="text-3xl font-bold">Entdecken</h2><p>Hier kannst du KI-Musik durchstöbern.</p></div>}
+          {view === 'upload' && <UploadForm />}
+          {view === 'login' && <LoginForm setUser={setUser} setView={setView} />}
+          {view === 'register' && <RegisterForm setUser={setUser} setView={setView} />}
+          {view === 'profile' && <Profile user={user} />}
+          <MusicPlayer track={currentTrack} />
+        </div>
+      );
+    };
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
