@@ -1,0 +1,386 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NexusChatPlayStore</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+  <header class="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 flex justify-between items-center">
+    <h1 class="text-2xl font-bold">NexusChatPlayStore</h1>
+    <div class="flex space-x-4">
+      <button onclick="showTab('home')" class="text-white hover:text-gray-200" title="Home">
+        <i class="fas fa-home text-xl"></i>
+      </button>
+      <button onclick="showTab('upload')" class="text-white hover:text-gray-200" title="Upload">
+        <i class="fas fa-upload text-xl"></i>
+      </button>
+    </div>
+  </header>
+  <main class="flex-grow p-4">
+    <section id="uploadTab" class="tab-content hidden">
+      <h2 class="text-xl font-semibold mb-4">App hochladen</h2>
+      <input type="text" id="keyInput" placeholder="Schlüsselcode eingeben" class="border p-2 mb-3 w-full max-w-md rounded">
+      <input type="text" id="appName" placeholder="App-Name eingeben" class="border p-2 mb-3 w-full max-w-md rounded">
+      <select id="appCategory" class="border p-2 mb-3 w-full max-w-md rounded">
+        <option value="" disabled selected>Kategorie auswählen</option>
+        <option value="Spiel">Spiel</option>
+        <option value="Bildung">Bildung</option>
+        <option value="Unterhaltung">Unterhaltung</option>
+        <option value="Produktivität">Produktivität</option>
+        <option value="Sonstiges">Sonstiges</option>
+      </select>
+      <input type="file" id="appUpload" accept=".html" class="mb-3 w-full max-w-md">
+      <input type="file" id="imageUpload" accept="image/png,image/jpeg" class="mb-3 w-full max-w-md">
+      <button onclick="uploadApp()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Hochladen</button>
+    </section>
+    <section id="homeTab" class="tab-content">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold">Home-Menü</h2>
+        <input type="text" id="searchInput" placeholder="Apps suchen..." class="border p-2 w-full max-w-xs rounded">
+      </div>
+      <div id="appList" class="flex flex-wrap gap-4"></div>
+    </section>
+    <section id="previewSection" class="hidden mt-6">
+      <h2 class="text-xl font-semibold mb-4">Vorschau</h2>
+      <div class="flex items-center mb-4">
+        <label class="mr-2">Format:</label>
+        <button onclick="setPreviewFormat('mobile')" class="bg-blue-200 px-3 py-1 rounded mr-2 hover:bg-blue-300">Handy</button>
+        <button onclick="setPreviewFormat('web')" class="bg-blue-200 px-3 py-1 rounded hover:bg-blue-300">Web</button>
+      </div>
+      <div id="previewContainer" class="flex justify-center">
+        <iframe id="previewFrame" class="border"></iframe>
+      </div>
+      <div class="mt-4">
+        <button onclick="startApp()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Starten</button>
+      </div>
+    </section>
+  </main>
+  <footer class="bg-gray-800 text-white p-4 text-center">
+    <button onclick="showModal('impressum')" class="text-blue-300 hover:underline mx-2">Impressum</button>
+    <button onclick="showModal('privacy')" class="text-blue-300 hover:underline mx-2">Datenschutz</button>
+  </footer>
+  <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+    <div class="bg-white p-6 rounded-lg max-w-2xl max-h-[80vh] overflow-y-auto">
+      <div id="modalContent"></div>
+      <button onclick="closeModal()" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Schließen</button>
+    </div>
+  </div>
+  <script>
+    let apps = JSON.parse(localStorage.getItem('apps')) || [];
+    let currentFormat = 'mobile';
+    const MAX_APPS = 45;
+
+    const modalContents = {
+      impressum: `
+        <strong>Impressum</strong>
+        <p>Angaben gemäß § 5 TMG</p>
+        <p>
+          Justin Schweizer<br>
+          E-Mail: schweizerjustin2@gmail.com<br>
+          Deutschland
+        </p>
+        <p>
+          <strong>Kontakt:</strong><br>
+          E-Mail: schweizerjustin2@gmail.com
+        </p>
+        <p>
+          <strong>Haftungsausschluss:</strong><br>
+          Die Inhalte dieser Anwendung wurden mit größter Sorgfalt erstellt. Für die Richtigkeit, Vollständigkeit und Aktualität der Inhalte übernehmen wir jedoch keine Gewähr. Als Dienstanbieter sind wir gemäß § 7 Abs.1 TMG für eigene Inhalte auf diesen Seiten nach den allgemeinen Gesetzen verantwortlich. Nach §§ 8 bis 10 TMG sind wir jedoch nicht verpflichtet, übermittelte oder gespeicherte fremde Informationen zu überwachen.
+        </p>
+        <p>
+          <strong>Urheberrecht:</strong><br>
+          Die durch den Dienstanbieter erstellten Inhalte und Werke auf diesen Seiten unterliegen dem deutschen Urheberrecht. Die Vervielfältigung, Bearbeitung, Verbreitung und jede Art der Verwertung außerhalb der Grenzen des Urheberrechtes bedürfen der schriftlichen Zustimmung des jeweiligen Autors bzw. Erstellers.
+        </p>
+      `,
+      privacy: `
+        <strong>Datenschutzrichtlinie</strong>
+        <p>Diese Datenschutzrichtlinie gilt für die App „NexusChatPlayStore“ (nachfolgend „Anwendung“ genannt) für Mobilgeräte, die von Justin Schweizer (nachfolgend „Dienstanbieter“ genannt) als werbefinanzierter Dienst erstellt wurde. Dieser Dienst ist zur Nutzung „im Ist-Zustand“ vorgesehen.</p>
+        <br>
+        <strong>Erfassung und Verwendung von Informationen</strong>
+        <p>Die Anwendung sammelt Informationen, wenn Sie sie herunterladen und verwenden. Diese Informationen können Informationen enthalten wie</p>
+        <ul>
+          <li>Die Internetprotokolladresse Ihres Geräts (z. B. IP-Adresse)</li>
+          <li>Die von Ihnen besuchten Seiten der Anwendung, die Uhrzeit und das Datum Ihres Besuchs, die auf diesen Seiten verbrachte Zeit</li>
+          <li>Die für die Anwendung aufgewendete Zeit</li>
+          <li>Das Betriebssystem, das Sie auf Ihrem Mobilgerät verwenden</li>
+        </ul>
+        <br>
+        <p>Die Anwendung sammelt keine genauen Informationen über den Standort Ihres Mobilgeräts.</p>
+        <br>
+        <p>Der Dienstanbieter kann die von Ihnen bereitgestellten Informationen verwenden, um Sie von Zeit zu Zeit zu kontaktieren und Ihnen wichtige Informationen, erforderliche Mitteilungen und Marketingaktionen zukommen zu lassen.</p>
+        <br>
+        <p>Um Ihnen bei der Nutzung der Anwendung ein besseres Erlebnis zu bieten, kann der Dienstanbieter von Ihnen verlangen, dass Sie uns bestimmte personenbezogene Daten zur Verfügung stellen (z. B. Benutzername). Die vom Dienstanbieter angeforderten Informationen werden von ihm gespeichert und wie in dieser Datenschutzrichtlinie beschrieben verwendet.</p>
+        <br>
+        <strong>Zugriff durch Dritte</strong>
+        <p>Nur aggregierte, anonymisierte Daten werden regelmäßig an externe Dienste übermittelt, um den Dienstanbieter bei der Verbesserung der Anwendung und seines Dienstes zu unterstützen. Der Dienstanbieter kann Ihre Daten gemäß den in dieser Datenschutzerklärung beschriebenen Methoden an Dritte weitergeben.</p>
+        <br>
+        <p>Bitte beachten Sie, dass die Anwendung Dienste von Drittanbietern nutzt, die ihre eigenen Datenschutzrichtlinien zur Datenverarbeitung haben. Nachfolgend finden Sie die Links zu den Datenschutzrichtlinien der von der Anwendung genutzten Drittanbieter:</p>
+        <ul>
+          <li><a href="https://support.google.com/admob/answer/6128543?hl=en" target="_blank" rel="noopener noreferrer">AdMob</a></li>
+        </ul>
+        <br>
+        <p>Der Dienstanbieter kann vom Benutzer bereitgestellte und automatisch gesammelte Informationen offenlegen:</p>
+        <ul>
+          <li>wie gesetzlich vorgeschrieben, z. B. um einer Vorladung oder einem ähnlichen rechtlichen Verfahren nachzukommen;</li>
+          <li>wenn sie in gutem Glauben davon ausgehen, dass die Offenlegung notwendig ist, um ihre Rechte zu schützen, Ihre Sicherheit oder die Sicherheit anderer zu gewährleisten, Betrug zu untersuchen oder auf eine behördliche Anfrage zu reagieren;</li>
+          <li>mit ihren vertrauenswürdigen Dienstleistern, die in ihrem Auftrag arbeiten, die Informationen nicht unabhängig nutzen und sich verpflichtet haben, die in dieser Datenschutzerklärung festgelegten Regeln einzuhalten.</li>
+        </ul>
+        <br>
+        <strong>Opt-Out-Rechte</strong>
+        <p>Sie können die Erfassung aller Informationen durch die Anwendung einfach stoppen, indem Sie sie deinstallieren. Sie können die standardmäßigen Deinstallationsprozesse verwenden, die auf Ihrem Mobilgerät oder über den Marktplatz oder das Netzwerk für mobile Anwendungen verfügbar sind.</p>
+        <br>
+        <strong>Datenaufbewahrungsrichtlinie</strong>
+        <p>Der Dienstanbieter speichert die vom Benutzer bereitgestellten Daten, solange Sie die Anwendung nutzen, und für einen angemessenen Zeitraum danach. Wenn Sie möchten, dass der Dienstanbieter die von Ihnen über die Anwendung bereitgestellten Daten löscht, kontaktieren Sie ihn bitte unter schweizerjustin2@gmail.com, und er wird in angemessener Zeit reagieren.</p>
+        <br>
+        <strong>Kinder</strong>
+        <p>Der Dienstanbieter verwendet die Anwendung nicht wissentlich, um Daten von Kindern unter 13 Jahren zu erbitten oder an sie zu vermarkten. Die Anwendung richtet sich nicht an Personen unter 13 Jahren. Der Dienstanbieter sammelt wissentlich keine personenbezogenen Daten von Kindern unter 13 Jahren. Falls der Dienstanbieter feststellt, dass ein Kind unter 13 Jahren personenbezogene Daten bereitgestellt hat, wird er diese unverzüglich von seinen Servern löschen. Wenn Sie ein Elternteil oder Erziehungsberechtigter sind und wissen, dass Ihr Kind uns personenbezogene Daten bereitgestellt hat, kontaktieren Sie bitte den Dienstanbieter (schweizerjustin2@gmail.com), damit er die erforderlichen Maßnahmen ergreifen kann.</p>
+        <br>
+        <strong>Sicherheit</strong>
+        <p>Der Dienstanbieter ist besorgt darum, die Vertraulichkeit Ihrer Informationen zu schützen. Der Dienstanbieter stellt physische, elektronische und verfahrenstechnische Schutzmaßnahmen bereit, um die von ihm verarbeiteten und gespeicherten Informationen zu schützen.</p>
+        <br>
+        <strong>Änderungen</strong>
+        <p>Diese Datenschutzrichtlinie kann aus beliebigem Grund von Zeit zu Zeit aktualisiert werden. Der Dienstanbieter wird Sie über Änderungen an der Datenschutzrichtlinie informieren, indem er diese Seite mit der neuen Datenschutzrichtlinie aktualisiert. Es wird empfohlen, diese Datenschutzrichtlinie regelmäßig auf Änderungen zu überprüfen, da die fortgesetzte Nutzung als Zustimmung zu allen Änderungen gilt.</p>
+        <br>
+        <p>Diese Datenschutzrichtlinie ist ab dem 2025-06-11 wirksam.</p>
+        <br>
+        <strong>Ihre Zustimmung</strong>
+        <p>Durch die Nutzung der Anwendung stimmen Sie der Verarbeitung Ihrer Informationen zu, wie in dieser Datenschutzrichtlinie jetzt und in geänderter Form von uns dargelegt.</p>
+        <br>
+        <strong>Kontaktieren Sie uns</strong>
+        <p>Wenn Sie Fragen zum Datenschutz bei der Nutzung der Anwendung oder zu den Vorgehensweisen haben, wenden Sie sich bitte per E-Mail an den Dienstanbieter unter schweizerjustin2@gmail.com.</p>
+        <hr>
+        <p>Diese Datenschutzrichtlinienseite wurde vom <a href="https://app-privacy-policy-generator.nisrulz.com/" target="_blank" rel="noopener noreferrer">App Privacy Policy Generator</a> erstellt.</p>
+      `
+    };
+
+    function showModal(type) {
+      const modal = document.getElementById('modal');
+      const modalContent = document.getElementById('modalContent');
+      modalContent.innerHTML = modalContents[type];
+      modal.classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('modal').classList.add('hidden');
+    }
+
+    function saveApps() {
+      localStorage.setItem('apps', JSON.stringify(apps));
+    }
+
+    function showTab(tab) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById(tab + 'Tab').classList.remove('hidden');
+      if (tab === 'home') {
+        document.getElementById('searchInput').value = ''; // Suche zurücksetzen
+        renderAppList();
+      }
+    }
+
+    function uploadApp() {
+      if (apps.length >= MAX_APPS) {
+        alert('Maximal 45 Apps können hochgeladen werden. Bitte entfernen Sie einige Apps, um weitere hochzuladen.');
+        return;
+      }
+
+      const keyInput = document.getElementById('keyInput').value;
+      const appName = document.getElementById('appName').value.trim();
+      const appCategory = document.getElementById('appCategory').value;
+      const htmlFile = document.getElementById('appUpload').files[0];
+      const imageFile = document.getElementById('imageUpload').files[0];
+
+      if (keyInput !== 'Chimaking1') {
+        alert('Ungültiger Schlüsselcode. Bitte verwenden Sie "Chimaking1".');
+        return;
+      }
+      if (!appName) {
+        alert('Bitte geben Sie einen App-Namen ein.');
+        return;
+      }
+      if (!appCategory) {
+        alert('Bitte wählen Sie eine Kategorie aus.');
+        return;
+      }
+      if (!htmlFile) {
+        alert('Bitte laden Sie eine .html-Datei hoch.');
+        return;
+      }
+      if (!htmlFile.name.endsWith('.html')) {
+        alert('Die Datei muss eine .html-Datei sein.');
+        return;
+      }
+      if (!imageFile) {
+        alert('Bitte laden Sie ein Bild hoch.');
+        return;
+      }
+      if (!['image/png', 'image/jpeg'].includes(imageFile.type)) {
+        alert('Das Bild muss im PNG- oder JPEG-Format sein.');
+        return;
+      }
+
+      const imgReader = new FileReader();
+      imgReader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          if (img.width !== 500 || img.height !== 500) {
+            alert('Das Bild muss 500x500 Pixel groß sein.');
+            return;
+          }
+          const htmlReader = new FileReader();
+          htmlReader.onload = function(e2) {
+            const app = {
+              id: Date.now(),
+              name: appName,
+              category: appCategory,
+              content: e2.target.result,
+              image: e.target.result
+            };
+            apps.push(app);
+            saveApps();
+            renderAppList();
+            showTab('home');
+            document.getElementById('keyInput').value = '';
+            document.getElementById('appName').value = '';
+            document.getElementById('appCategory').value = '';
+            document.getElementById('appUpload').value = '';
+            document.getElementById('imageUpload').value = '';
+          };
+          htmlReader.onerror = function() {
+            alert('Fehler beim Lesen der HTML-Datei. Bitte versuchen Sie es erneut.');
+          };
+          htmlReader.readAsText(htmlFile);
+        };
+        img.onerror = function() {
+          alert('Fehler beim Lesen des Bildes. Bitte überprüfen Sie die Datei.');
+        };
+        img.src = e.target.result;
+      };
+      imgReader.onerror = function() {
+        alert('Fehler beim Lesen des Bildes. Bitte versuchen Sie es erneut.');
+      };
+      imgReader.readAsDataURL(imageFile);
+    }
+
+    function renderAppList(searchTerm = '') {
+      const appList = document.getElementById('appList');
+      appList.innerHTML = '';
+      const filteredApps = apps.filter(app => 
+        app.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      filteredApps.forEach(app => {
+        const appCard = document.createElement('div');
+        appCard.className = 'bg-gradient-to-r from-purple-500 to-blue-500 text-white p-4 rounded-lg w-40 h-48 flex flex-col items-center justify-center shadow-lg';
+        appCard.innerHTML = `
+          <img src="${app.image}" alt="${app.name}" class="w-20 h-20 rounded mb-2">
+          <h3 class="text-sm font-semibold text-center">${app.name}</h3>
+          <p class="text-xs text-center">${app.category}</p>
+          <div class="flex space-x-2 mt-2">
+            <button onclick="showPreview(${app.id})" class="bg-white text-purple-500 text-xs px-2 py-1 rounded hover:bg-gray-100">Vorschau</button>
+            <button onclick="startApp(${app.id})" class="bg-green-500 text-white text-xs px-2 py-1 rounded hover:bg-green-600">Start</button>
+          </div>
+        `;
+        appList.appendChild(appCard);
+      });
+    }
+
+    function showPreview(appId) {
+      const app = apps.find(a => a.id === appId);
+      if (app) {
+        const previewFrame = document.getElementById('previewFrame');
+        const previewSection = document.getElementById('previewSection');
+        previewFrame.srcdoc = app.content;
+        setPreviewFormat(currentFormat);
+        previewSection.classList.remove('hidden');
+        previewSection.dataset.appId = appId;
+        previewFrame.onload = function() {
+          console.log('Vorschau geladen für App:', app.name);
+        };
+        previewFrame.onerror = function() {
+          alert('Fehler beim Laden der Vorschau. Bitte überprüfen Sie die HTML-Datei.');
+        };
+      } else {
+        alert('App nicht gefunden. Bitte versuchen Sie es erneut.');
+      }
+    }
+
+    function setPreviewFormat(format) {
+      currentFormat = format;
+      const previewFrame = document.getElementById('previewFrame');
+      if (format === 'mobile') {
+        previewFrame.style.width = '375px';
+        previewFrame.style.height = '667px';
+        previewFrame.style.border = '2px solid #000';
+        previewFrame.style.borderRadius = '20px';
+      } else {
+        previewFrame.style.width = '100%';
+        previewFrame.style.height = '500px';
+        previewFrame.style.border = '1px solid #000';
+        previewFrame.style.borderRadius = '0';
+      }
+    }
+
+    function startApp(appId) {
+      const app = apps.find(a => a.id == appId);
+      if (app) {
+        const win = window.open();
+        if (win) {
+          win.document.write(app.content);
+        } else {
+          alert('Popup-Blocker verhindert das Öffnen. Bitte deaktivieren Sie den Popup-Blocker.');
+        }
+      }
+    }
+
+    // Event-Listener für Suche
+    document.getElementById('searchInput').addEventListener('input', function(e) {
+      renderAppList(e.target.value);
+    });
+
+    // Initial render
+    showTab('home');
+    renderAppList();
+  </script>
+</body>
+</html>
