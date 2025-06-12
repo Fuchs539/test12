@@ -1,0 +1,717 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NexusChatPlayStore</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+  <header class="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 flex justify-between items-center">
+    <h1 class="text-2xl font-bold">NexusChatPlayStore</h1>
+    <div class="flex space-x-4">
+      <button onclick="showTab('home')" class="text-white hover:text-gray-200" title="Home">
+        <i class="fas fa-home text-xl"></i>
+      </button>
+      <button onclick="showTab('upload')" class="text-white hover:text-gray-200" title="Upload">
+        <i class="fas fa-upload text-xl"></i>
+      </button>
+      <button onclick="showTab('library')" class="text-white hover:text-gray-200" title="Bibliothek">
+        <i class="fas fa-book text-xl"></i>
+      </button>
+      <button onclick="showTab('analytics')" class="text-white hover:text-gray-200" title="Analytics">
+        <i class="fas fa-chart-line text-xl"></i>
+      </button>
+    </div>
+  </header>
+  <main class="flex-grow p-4">
+    <section id="uploadTab" class="tab-content hidden">
+      <h2 class="text-xl font-semibold mb-4">App hochladen</h2>
+      <input type="text" id="keyInput" placeholder="Schlüsselcode eingeben" class="border p-2 mb-3 w-full max-w-md rounded">
+      <input type="text" id="appName" placeholder="App-Name eingeben" class="border p-2 mb-3 w-full max-w-md rounded">
+      <select id="appCategory" class="border p-2 mb-3 w-full max-w-md rounded">
+        <option value="" disabled selected>Kategorie auswählen</option>
+        <option value="Spiel">Spiel</option>
+        <option value="Bildung">Bildung</option>
+        <option value="Unterhaltung">Unterhaltung</option>
+        <option value="Produktivität">Produktivität</option>
+        <option value="Sonstiges">Sonstiges</option>
+      </select>
+      <input type="file" id="appUpload" accept=".html" class="mb-3 w-full max-w-md">
+      <input type="file" id="imageUpload" accept="image/png,image/jpeg" class="mb-3 w-full max-w-md">
+      <button onclick="uploadApp()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Hochladen</button>
+    </section>
+    <section id="homeTab" class="tab-content">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold">Home-Menü</h2>
+        <input type="text" id="searchInput" placeholder="Apps suchen..." class="border p-2 w-full max-w-xs rounded">
+      </div>
+      <div id="appList" class="flex flex-wrap gap-4"></div>
+    </section>
+    <section id="libraryTab" class="tab-content hidden">
+      <h2 class="text-xl font-semibold mb-4">Bibliothek</h2>
+      <div id="libraryAuth" class="mb-4">
+        <input type="text" id="libraryKeyInput" placeholder="Code eingeben" class="border p-2 mb-3 w-full max-w-md rounded">
+        <button onclick="authenticateLibrary()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Zugriff erhalten</button>
+      </div>
+      <div id="libraryContent" class="hidden">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-semibold">Gespeicherte Apps</h3>
+          <input type="text" id="librarySearchInput" placeholder="Apps suchen..." class="border p-2 w-full max-w-xs rounded">
+        </div>
+        <div id="libraryAppList" class="flex flex-wrap gap-4"></div>
+      </div>
+    </section>
+    <section id="analyticsTab" class="tab-content hidden">
+      <h2 class="text-xl font-semibold mb-4">Analytics</h2>
+      <div class="bg-white p-4 rounded-lg shadow">
+        <h3 class="text-lg font-semibold mb-2">Seitenaufrufe</h3>
+        <p id="monthlyViews">Monatliche Aufrufe: Lade...</p>
+        <p id="yearlyViews">Jährliche Aufrufe: Lade...</p>
+        <p id="totalViews">Gesamtaufrufe: Lade...</p>
+        <h3 class="text-lg font-semibold mt-4 mb-2">Geschätzter Umsatz (AdSense)</h3>
+        <p id="totalRevenue">Gesamtumsatz: Lade...</p>
+      </div>
+    </section>
+    <section id="previewSection" class="hidden mt-6">
+      <h2 class="text-xl font-semibold mb-4">Vorschau</h2>
+      <div class="flex items-center mb-4">
+        <label class="mr-2">Format:</label>
+        <button onclick="setPreviewFormat('mobile')" class="bg-blue-200 px-3 py-1 rounded mr-2 hover:bg-blue-300">Handy</button>
+        <button onclick="setPreviewFormat('web')" class="bg-blue-200 px-3 py-1 rounded hover:bg-blue-300">Web</button>
+      </div>
+      <div id="previewContainer" class="flex justify-center">
+        <iframe id="previewFrame" class="border"></iframe>
+      </div>
+    </section>
+  </main>
+  <footer class="bg-gray-800 text-white p-4 text-center">
+    <button onclick="showModal('impressum')" class="text-blue-300 hover:underline mx-2">Impressum</button>
+    <button onclick="showModal('privacy')" class="text-blue-300 hover:underline mx-2">Datenschutz</button>
+    <button onclick="showModal('server')" class="text-blue-300 hover:underline mx-2">Server-Verwaltung</button>
+  </footer>
+  <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+    <div class="bg-white p-6 rounded-lg max-w-2xl max-h-[80vh] overflow-y-auto">
+      <div id="modalContent"></div>
+      <button onclick="closeModal()" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Schließen</button>
+    </div>
+  </div>
+  <div id="removeModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+    <div class="bg-white p-6 rounded-lg max-w-md">
+      <h3 class="text-lg font-semibold mb-4">App entfernen</h3>
+      <p>Bitte geben Sie den Code ein, um die App zu entfernen:</p>
+      <input type="text" id="removeKeyInput" placeholder="Code eingeben" class="border p-2 mb-3 w-full rounded">
+      <div class="flex space-x-2">
+        <button onclick="confirmRemoveApp()" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Entfernen</button>
+        <button onclick="closeRemoveModal()" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    let apps = [];
+    let currentFormat = 'mobile';
+    let currentAppId = null;
+    let libraryAuthenticated = false;
+    let appToRemove = null;
+    let analyticsData = {
+      monthlyViews: 0,
+      yearlyViews: 0,
+      totalViews: 0,
+      totalRevenue: 0,
+      lastMonthReset: null,
+      lastYearReset: null
+    };
+    const MAX_APPS = 45;
+    const DB_NAME = 'NexusChatPlayStore';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'apps';
+    const ANALYTICS_STORE = 'analytics';
+    const AUTH_CODE = 'Chima€King1';
+    const RPM = 5; // Geschätzte Einnahmen pro 1000 Aufrufe in USD
+
+    const modalContents = {
+      impressum: `
+        <strong>Impressum</strong>
+        <p>Angaben gemäß § 5 TMG</p>
+        <p>
+          Justin Schweizer<br>
+          E-Mail: schweizerjustin2@gmail.com<br>
+          Deutschland
+        </p>
+        <p>
+          <strong>Kontakt:</strong><br>
+          E-Mail: schweizerjustin2@gmail.com
+        </p>
+        <p>
+          <strong>Haftungsausschluss:</strong><br>
+          Die Inhalte dieser Anwendung wurden mit größter Sorgfalt erstellt. Für die Richtigkeit, Vollständigkeit und Aktualität der Inhalte übernehmen wir jedoch keine Gewähr. Als Dienstanbieter sind wir gemäß § 7 Abs.1 TMG für eigene Inhalte auf diesen Seiten nach den allgemeinen Gesetzen verantwortlich. Nach §§ 8 bis 10 TMG sind wir jedoch nicht verpflichtet, übermittelte oder gespeicherte fremde Informationen zu überwachen.
+        </p>
+        <p>
+          <strong>Urheberrecht:</strong><br>
+          Die durch den Dienstanbieter erstellten Inhalte und Werke auf diesen Seiten unterliegen dem deutschen Urheberrecht. Die Vervielfältigung, Bearbeitung, Verbreitung und jede Art der Verwertung außerhalb der Grenzen des Urheberrechtes bedürfen der schriftlichen Zustimmung des jeweiligen Autors bzw. Erstellers.
+        </p>
+      `,
+      privacy: `
+        <strong>Datenschutzrichtlinie</strong>
+        <p>Diese Datenschutzrichtlinie gilt für die App „NexusChatPlayStore“ (nachfolgend „Anwendung“ genannt) für Mobilgeräte, die von Justin Schweizer (nachfolgend „Dienstanbieter“ genannt) als werbefinanzierter Dienst erstellt wurde. Dieser Dienst ist zur Nutzung „im Ist-Zustand“ vorgesehen.</p>
+        <br>
+        <strong>Erfassung und Verwendung von Informationen</strong>
+        <p>Die Anwendung sammelt Informationen, wenn Sie sie herunterladen und verwenden. Diese Informationen können Informationen enthalten wie</p>
+        <ul>
+          <li>Die Internetprotokolladresse Ihres Geräts (z. B. IP-Adresse)</li>
+          <li>Die von Ihnen besuchten Seiten der Anwendung, die Uhrzeit und das Datum Ihres Besuchs, die auf diesen Seiten verbrachte Zeit</li>
+          <li>Die für die Anwendung aufgewendete Zeit</li>
+          <li>Das Betriebssystem, das Sie auf Ihrem Mobilgerät verwenden</li>
+        </ul>
+        <br>
+        <p>Die Anwendung sammelt keine genauen Informationen über den Standort Ihres Mobilgeräts.</p>
+        <br>
+        <p>Der Dienstanbieter kann die von Ihnen bereitgestellten Informationen verwenden, um Sie von Zeit zu Zeit zu kontaktieren und Ihnen wichtige Informationen, erforderliche Mitteilungen und Marketingaktionen zukommen zu lassen.</p>
+        <br>
+        <p>Um Ihnen bei der Nutzung der Anwendung ein besseres Erlebnis zu bieten, kann der Dienstanbieter von Ihnen verlangen, dass Sie uns bestimmte personenbezogene Daten zur Verfügung stellen (z. B. Benutzername). Die vom Dienstanbieter angeforderten Informationen werden von ihm gespeichert und wie in dieser Datenschutzrichtlinie beschrieben verwendet.</p>
+        <br>
+        <strong>Zugriff durch Dritte</strong>
+        <p>Nur aggregierte, anonymisierte Daten werden regelmäßig an externe Dienste übermittelt, um den Dienstanbieter bei der Verbesserung der Anwendung und seines Dienstes zu unterstützen. Der Dienstanbieter kann Ihre Daten gemäß den in dieser Datenschutzerklärung beschriebenen Methoden an Dritte weitergeben.</p>
+        <br>
+        <p>Bitte beachten Sie, dass die Anwendung Dienste von Drittanbietern nutzt, die ihre eigenen Datenschutzrichtlinien zur Datenverarbeitung haben. Nachfolgend finden Sie die Links zu den Datenschutzrichtlinien der von der Anwendung genutzten Drittanbieter:</p>
+        <ul>
+          <li><a href="https://support.google.com/admob/answer/6128543?hl=en" target="_blank" rel="noopener noreferrer">AdMob</a></li>
+        </ul>
+        <br>
+        <p>Der Dienstanbieter kann vom Benutzer bereitgestellte und automatisch gesammelte Informationen offenlegen:</p>
+        <ul>
+          <li>wie gesetzlich vorgeschrieben, z. B. um einer Vorladung oder einem ähnlichen rechtlichen Verfahren nachzukommen;</li>
+          <li>wenn sie in gutem Glauben davon ausgehen, dass die Offenlegung notwendig ist, um ihre Rechte zu schützen, Ihre Sicherheit oder die Sicherheit anderer zu gewährleisten, Betrug zu untersuchen oder auf eine behördliche Anfrage zu reagieren;</li>
+          <li>mit ihren vertrauenswürdigen Dienstleistern, die in ihrem Auftrag arbeiten, die Informationen nicht unabhängig nutzen und sich verpflichtet haben, die in dieser Datenschutzerklärung festgelegten Regeln einzuhalten.</li>
+        </ul>
+        <br>
+        <strong>Opt-Out-Rechte</strong>
+        <p>Sie können die Erfassung aller Informationen durch die Anwendung einfach stoppen, indem Sie sie deinstallieren. Sie können die standardmäßigen Deinstallationsprozesse verwenden, die auf Ihrem Mobilgerät oder über den Marktplatz oder das Netzwerk für mobile Anwendungen verfügbar sind.</p>
+        <br>
+        <strong>Datenaufbewahrungsrichtlinie</strong>
+        <p>Der Dienstanbieter speichert die vom Benutzer bereitgestellten Daten, solange Sie die Anwendung nutzen, und für einen angemessenen Zeitraum danach. Wenn Sie möchten, dass der Dienstanbieter die von Ihnen über die Anwendung bereitgestellten Daten löscht, kontaktieren Sie ihn bitte unter schweizerjustin2@gmail.com, und er wird in angemessener Zeit reagieren.</p>
+        <br>
+        <strong>Kinder</strong>
+        <p>Der Dienstanbieter verwendet die Anwendung nicht wissentlich, um Daten von Kindern unter 13 Jahren zu erbitten oder an sie zu vermarkten. Die Anwendung richtet sich nicht an Personen unter 13 Jahren. Der Dienstanbieter sammelt wissentlich keine personenbezogenen Daten von Kindern unter 13 Jahren. Falls der Dienstanbieter feststellt, dass ein Kind unter 13 Jahren personenbezogene Daten bereitgestellt hat, wird er diese unverzüglich von seinen Servern löschen. Wenn Sie ein Elternteil oder Erziehungsberechtigter sind und wissen, dass Ihr Kind uns personenbezogene Daten bereitgestellt hat, kontaktieren Sie bitte den Dienstanbieter (schweizerjustin2@gmail.com), damit er die erforderlichen Maßnahmen ergreifen kann.</p>
+        <br>
+        <strong>Sicherheit</strong>
+        <p>Der Dienstanbieter ist besorgt darum, die Vertraulichkeit Ihrer Informationen zu schützen. Der Dienstanbieter stellt physische, elektronische und verfahrenstechnische Schutzmaßnahmen bereit, um die von ihm verarbeiteten und gespeicherten Informationen zu schützen.</p>
+        <br>
+        <strong>Änderungen</strong>
+        <p>Diese Datenschutzrichtlinie kann aus beliebigem Grund von Zeit zu Zeit aktualisiert werden. Der Dienstanbieter wird Sie über Änderungen an der Datenschutzrichtlinie informieren, indem er diese Seite mit der neuen Datenschutzrichtlinie aktualisiert. Es wird empfohlen, diese Datenschutzrichtlinie regelmäßig auf Änderungen zu überprüfen, da die fortgesetzte Nutzung als Zustimmung zu allen Änderungen gilt.</p>
+        <br>
+        <p>Diese Datenschutzrichtlinie ist ab dem 2025-06-11 wirksam.</p>
+        <br>
+        <strong>Ihre Zustimmung</strong>
+        <p>Durch die Nutzung der Anwendung stimmen Sie der Verarbeitung Ihrer Informationen zu, wie in dieser Datenschutzrichtlinie jetzt und in geänderter Form von uns dargelegt.</p>
+        <br>
+        <strong>Kontaktieren Sie uns</strong>
+        <p>Wenn Sie Fragen zum Datenschutz bei der Nutzung der Anwendung oder zu den Vorgehensweisen haben, wenden Sie sich bitte per E-Mail an den Dienstanbieter unter schweizerjustin2@gmail.com.</p>
+        <hr>
+        <p>Diese Datenschutzrichtlinienseite wurde vom <a href="https://app-privacy-policy-generator.nisrulz.com/" target="_blank" rel="noopener noreferrer">App Privacy Policy Generator</a> erstellt.</p>
+      `,
+      server: `
+        <strong>Server-Verwaltung</strong>
+        <p>Die Apps werden lokal in Ihrem Browser mithilfe von IndexedDB gespeichert. Diese Speicherung ist dauerhaft und bleibt erhalten, bis die Browserdaten für diese Website manuell gelöscht werden.</p>
+        <p><strong>Aktueller Status:</strong></p>
+        <p id="serverStatus">Lade Status...</p>
+      `
+    };
+
+    function showModal(type) {
+      const modal = document.getElementById('modal');
+      const modalContent = document.getElementById('modalContent');
+      modalContent.innerHTML = modalContents[type];
+      modal.classList.remove('hidden');
+      if (type === 'server') {
+        updateServerStatus();
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('modal').classList.add('hidden');
+    }
+
+    function openRemoveModal(appId) {
+      appToRemove = appId;
+      document.getElementById('removeModal').classList.remove('hidden');
+      document.getElementById('removeKeyInput').value = '';
+    }
+
+    function closeRemoveModal() {
+      document.getElementById('removeModal').classList.add('hidden');
+      appToRemove = null;
+    }
+
+    // IndexedDB Initialisierung
+    function openDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = event => {
+          const db = event.target.result;
+          db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+          db.createObjectStore(ANALYTICS_STORE, { keyPath: 'type' });
+        };
+        request.onsuccess = event => resolve(event.target.result);
+        request.onerror = event => reject(event.target.error);
+      });
+    }
+
+    async function fetchApps() {
+      try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+          const transaction = db.transaction([STORE_NAME], 'readonly');
+          const store = transaction.objectStore(STORE_NAME);
+          const request = store.getAll();
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      } catch (error) {
+        console.error('Fehler beim Abrufen der Apps:', error);
+        alert('Fehler beim Laden der Apps.');
+        return [];
+      }
+    }
+
+    async function saveApp(app) {
+      try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+          const transaction = db.transaction([STORE_NAME], 'readwrite');
+          const store = transaction.objectStore(STORE_NAME);
+          const request = store.put(app);
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject(request.error);
+        });
+      } catch (error) {
+        console.error('Fehler beim Speichern der App:', error);
+        throw error;
+      }
+    }
+
+    async function deleteApp(appId) {
+      try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+          const transaction = db.transaction([STORE_NAME], 'readwrite');
+          const store = transaction.objectStore(STORE_NAME);
+          const request = store.delete(appId);
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject(request.error);
+        });
+      } catch (error) {
+        console.error('Fehler beim Löschen der App:', error);
+        throw error;
+      }
+    }
+
+    async function saveAnalytics() {
+      try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+          const transaction = db.transaction([ANALYTICS_STORE], 'readwrite');
+          const store = transaction.objectStore(ANALYTICS_STORE);
+          const request = store.put({ type: 'analytics', data: analyticsData });
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject(request.error);
+        });
+      } catch (error) {
+        console.error('Fehler beim Speichern der Analytics:', error);
+        throw error;
+      }
+    }
+
+    async function fetchAnalytics() {
+      try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+          const transaction = db.transaction([ANALYTICS_STORE], 'readonly');
+          const store = transaction.objectStore(ANALYTICS_STORE);
+          const request = store.get('analytics');
+          request.onsuccess = () => {
+            if (request.result) {
+              analyticsData = request.result.data;
+            }
+            resolve(analyticsData);
+          };
+          request.onerror = () => reject(request.error);
+        });
+      } catch (error) {
+        console.error('Fehler beim Abrufen der Analytics:', error);
+        return analyticsData;
+      }
+    }
+
+    async function updateServerStatus() {
+      const statusEl = document.getElementById('serverStatus');
+      if (!statusEl) return;
+      const appCount = apps.length;
+      statusEl.innerHTML = `Gespeicherte Apps: ${appCount} (Maximal: ${MAX_APPS})`;
+    }
+
+    async function checkResets() {
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1;
+      const currentYear = now.getFullYear();
+      const lastMonthReset = analyticsData.lastMonthReset ? new Date(analyticsData.lastMonthReset) : null;
+      const lastYearReset = analyticsData.lastYearReset ? new Date(analyticsData.lastYearReset) : null;
+
+      // Monatlicher Reset
+      if (!lastMonthReset || lastMonthReset.getMonth() + 1 !== currentMonth || lastMonthReset.getFullYear() !== currentYear) {
+        analyticsData.monthlyViews = 0;
+        apps = apps.map(app => ({ ...app, monthlyViews: 0 }));
+        analyticsData.lastMonthReset = now.toISOString();
+        await saveApps();
+        await saveAnalytics();
+      }
+
+      // Jährlicher Reset
+      if (!lastYearReset || lastYearReset.getFullYear() !== currentYear) {
+        analyticsData.yearlyViews = 0;
+        analyticsData.lastYearReset = now.toISOString();
+        await saveAnalytics();
+      }
+    }
+
+    async function saveApps() {
+      try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+          const transaction = db.transaction([STORE_NAME], 'readwrite');
+          const store = transaction.objectStore(STORE_NAME);
+          apps.forEach(app => store.put(app));
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error);
+        });
+      } catch (error) {
+        console.error('Fehler beim Speichern der Apps:', error);
+        throw error;
+      }
+    }
+
+    async function updateAnalytics(appId) {
+      await fetchAnalytics();
+      analyticsData.monthlyViews = (analyticsData.monthlyViews || 0) + 1;
+      analyticsData.yearlyViews = (analyticsData.yearlyViews || 0) + 1;
+      analyticsData.totalViews = (analyticsData.totalViews || 0) + 1;
+      analyticsData.totalRevenue = (analyticsData.totalViews / 1000) * RPM;
+      await saveAnalytics();
+
+      if (appId) {
+        const app = apps.find(a => a.id === appId);
+        if (app) {
+          app.monthlyViews = (app.monthlyViews || 0) + 1;
+          app.totalViews = (app.totalViews || 0) + 1;
+          await saveApps();
+        }
+      }
+
+      updateAnalyticsDisplay();
+    }
+
+    function updateAnalyticsDisplay() {
+      document.getElementById('monthlyViews').innerHTML = `Monatliche Aufrufe: ${analyticsData.monthlyViews || 0}`;
+      document.getElementById('yearlyViews').innerHTML = `Jährliche Aufrufe: ${analyticsData.yearlyViews || 0}`;
+      document.getElementById('totalViews').innerHTML = `Gesamtaufrufe: ${analyticsData.totalViews || 0}`;
+      document.getElementById('totalRevenue').innerHTML = `Geschätzter Gesamtumsatz: $${(analyticsData.totalRevenue || 0).toFixed(2)} USD (basierend auf ${RPM} USD pro 1000 Aufrufe)`;
+    }
+
+    function showTab(tab) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById(tab + 'Tab').classList.remove('hidden');
+      if (tab === 'home') {
+        document.getElementById('searchInput').value = '';
+        renderAppList();
+      } else if (tab === 'library') {
+        libraryAuthenticated = false;
+        document.getElementById('libraryAuth').classList.remove('hidden');
+        document.getElementById('libraryContent').classList.add('hidden');
+        document.getElementById('libraryKeyInput').value = '';
+        document.getElementById('librarySearchInput').value = '';
+      } else if (tab === 'analytics') {
+        updateAnalyticsDisplay();
+      }
+    }
+
+    async function authenticateLibrary() {
+      const key = document.getElementById('libraryKeyInput').value;
+      if (key === AUTH_CODE) {
+        libraryAuthenticated = true;
+        document.getElementById('libraryAuth').classList.add('hidden');
+        document.getElementById('libraryContent').classList.remove('hidden');
+        renderLibraryAppList();
+      } else {
+        alert('Ungültiger Code.');
+      }
+    }
+
+    async function confirmRemoveApp() {
+      const key = document.getElementById('removeKeyInput').value;
+      if (key === AUTH_CODE) {
+        try {
+          await deleteApp(appToRemove);
+          apps = apps.filter(app => app.id !== appToRemove);
+          renderAppList();
+          renderLibraryAppList();
+          closeRemoveModal();
+          alert('App erfolgreich entfernt.');
+        } catch (error) {
+          alert('Fehler beim Entfernen der App.');
+        }
+      } else {
+        alert('Ungültiger Code.');
+      }
+    }
+
+    async function uploadApp() {
+      if (apps.length >= MAX_APPS) {
+        alert('Maximal 45 Apps können hochgeladen werden.');
+        return;
+      }
+
+      const keyInput = document.getElementById('keyInput').value;
+      const appName = document.getElementById('appName').value.trim();
+      const appCategory = document.getElementById('appCategory').value;
+      const htmlFile = document.getElementById('appUpload').files[0];
+      const imageFile = document.getElementById('imageUpload').files[0];
+
+      if (keyInput !== AUTH_CODE) {
+        alert('Ungültiger Schlüsselcode.');
+        return;
+      }
+      if (!appName) {
+        alert('Bitte geben Sie einen App-Namen ein.');
+        return;
+      }
+      if (!appCategory) {
+        alert('Bitte wählen Sie eine Kategorie aus.');
+        return;
+      }
+      if (!htmlFile) {
+        alert('Bitte laden Sie eine .html-Datei hoch.');
+        return;
+      }
+      if (!htmlFile.name.endsWith('.html')) {
+        alert('Die Datei muss eine .html-Datei sein.');
+        return;
+      }
+      if (!imageFile) {
+        alert('Bitte laden Sie ein Bild hoch.');
+        return;
+      }
+      if (!['image/png', 'image/jpeg'].includes(imageFile.type)) {
+        alert('Das Bild muss im PNG- oder JPEG-Format sein.');
+        return;
+      }
+
+      const imgReader = new FileReader();
+      imgReader.onload = async function(e) {
+        const img = new Image();
+        img.onload = async function() {
+          if (img.width !== 500 || img.height !== 500) {
+            alert('Das Bild muss 500x500 Pixel groß sein.');
+            return;
+          }
+          const htmlReader = new FileReader();
+          htmlReader.onload = async function(e2) {
+            const app = {
+              id: Date.now(),
+              name: appName,
+              category: appCategory,
+              content: e2.target.result,
+              image: e.target.result,
+              monthlyViews: 0,
+              totalViews: 0
+            };
+            try {
+              await saveApp(app);
+              apps.push(app);
+              renderAppList();
+              if (libraryAuthenticated) renderLibraryAppList();
+              showTab('home');
+              document.getElementById('keyInput').value = '';
+              document.getElementById('appName').value = '';
+              document.getElementById('appCategory').value = '';
+              document.getElementById('appUpload').value = '';
+              document.getElementById('imageUpload').value = '';
+            } catch (error) {
+              alert('Fehler beim Speichern der App.');
+            }
+          };
+          htmlReader.onerror = function() {
+            alert('Fehler beim Lesen der HTML-Datei. Bitte versuchen Sie es erneut.');
+          };
+          htmlReader.readAsText(htmlFile);
+        };
+        img.onerror = function() {
+          alert('Fehler beim Lesen des Bildes. Bitte überprüfen Sie die Datei.');
+        };
+        img.src = e.target.result;
+      };
+      imgReader.onerror = function() {
+        alert('Fehler beim Lesen des Bildes. Bitte versuchen Sie es erneut.');
+      };
+      imgReader.readAsDataURL(imageFile);
+    }
+
+    async function renderAppList(searchTerm = '') {
+      apps = await fetchApps();
+      const appList = document.getElementById('appList');
+      appList.innerHTML = '';
+      const filteredApps = apps.filter(app => 
+        app.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      filteredApps.forEach(app => {
+        const appCard = document.createElement('div');
+        appCard.className = 'bg-gradient-to-r from-purple-500 to-blue-500 text-white p-4 rounded-lg w-40 h-48 flex flex-col items-center justify-center shadow-lg';
+        appCard.innerHTML = `
+          <img src="${app.image}" alt="${app.name}" class="w-20 h-20 rounded mb-2">
+          <h3 class="text-sm font-semibold text-center">${app.name}</h3>
+          <p class="text-xs text-center">${app.category}</p>
+          <div class="flex space-x-2 mt-2">
+            <button onclick="showPreview(${app.id})" class="bg-white text-purple-500 text-xs px-2 py-1 rounded hover:bg-gray-100">Vorschau</button>
+            <button onclick="startApp(${app.id})" class="bg-green-500 text-white text-xs px-2 py-1 rounded hover:bg-green-600">Start</button>
+          </div>
+        `;
+        appList.appendChild(appCard);
+      });
+    }
+
+    async function renderLibraryAppList(searchTerm = '') {
+      if (!libraryAuthenticated) return;
+      apps = await fetchApps();
+      const appList = document.getElementById('libraryAppList');
+      appList.innerHTML = '';
+      const filteredApps = apps.filter(app => 
+        app.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      filteredApps.forEach(app => {
+        const appCard = document.createElement('div');
+        appCard.className = 'bg-gradient-to-r from-purple-500 to-blue-500 text-white p-4 rounded-lg w-40 h-48 flex flex-col items-center justify-center shadow-lg';
+        appCard.innerHTML = `
+          <img src="${app.image}" alt="${app.name}" class="w-20 h-20 rounded mb-2">
+          <h3 class="text-sm font-semibold text-center">${app.name}</h3>
+          <p class="text-xs text-center">${app.category}</p>
+          <p class="text-xs text-center">Monatliche Aufrufe: ${app.monthlyViews || 0}</p>
+          <p class="text-xs text-center">Gesamtaufrufe: ${app.totalViews || 0}</p>
+          <div class="flex space-x-2 mt-2">
+            <button onclick="showPreview(${app.id})" class="bg-white text-purple-500 text-xs px-2 py-1 rounded hover:bg-gray-100">Vorschau</button>
+            <button onclick="startApp(${app.id})" class="bg-green-500 text-white text-xs px-2 py-1 rounded hover:bg-green-600">Start</button>
+            <button onclick="openRemoveModal(${app.id})" class="bg-red-500 text-white text-xs px-2 py-1 rounded hover:bg-red-600">Entfernen</button>
+          </div>
+        `;
+        appList.appendChild(appCard);
+      });
+    }
+
+    function showPreview(appId) {
+      const app = apps.find(a => a.id === appId);
+      if (app) {
+        const previewFrame = document.getElementById('previewFrame');
+        const previewSection = document.getElementById('previewSection');
+        previewFrame.srcdoc = app.content;
+        setPreviewFormat(currentFormat);
+        previewSection.classList.remove('hidden');
+        currentAppId = appId;
+        previewFrame.onload = function() {
+          console.log('Vorschau geladen für App:', app.name);
+        };
+        previewFrame.onerror = function() {
+          alert('Fehler beim Laden der Vorschau. Bitte überprüfen Sie die HTML-Datei.');
+        };
+      } else {
+        alert('App nicht gefunden. Bitte versuchen Sie es erneut.');
+      }
+    }
+
+    function setPreviewFormat(format) {
+      currentFormat = format;
+      const previewFrame = document.getElementById('previewFrame');
+      if (format === 'mobile') {
+        previewFrame.style.width = '375px';
+        previewFrame.style.height = '667px';
+        previewFrame.style.border = '2px solid #000';
+        previewFrame.style.borderRadius = '20px';
+      } else {
+        previewFrame.style.width = '100%';
+        previewFrame.style.height = '500px';
+        previewFrame.style.border = '1px solid #000';
+        previewFrame.style.borderRadius = '0';
+      }
+    }
+
+    async function startApp(appId) {
+      const app = apps.find(a => a.id == appId);
+      if (app) {
+        await updateAnalytics(appId);
+        const win = window.open();
+        if (win) {
+          win.document.write(app.content);
+        } else {
+          alert('Popup-Blocker verhindert das Öffnen. Bitte deaktivieren Sie den Popup-Blocker.');
+        }
+      }
+    }
+
+    // Event-Listener für Suche
+    document.getElementById('searchInput').addEventListener('input', function(e) {
+      renderAppList(e.target.value);
+    });
+
+    document.getElementById('librarySearchInput').addEventListener('input', function(e) {
+      renderLibraryAppList(e.target.value);
+    });
+
+    // Initialisierung
+    async function init() {
+      await fetchAnalytics();
+      await checkResets();
+      showTab('home');
+      renderAppList();
+    }
+
+    init();
+  </script>
+</body>
+</html>
